@@ -1,10 +1,10 @@
 import { Transaction, AnalysisData } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Button } from './ui/button';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowRightCircle, ArrowLeftCircle } from 'lucide-react';
+import { ArrowRightCircle, ArrowLeftCircle, Printer } from 'lucide-react';
 import { Badge } from './ui/badge';
 
 interface AnalysisResultProps {
@@ -14,7 +14,9 @@ interface AnalysisResultProps {
   onToggleCategory: (transactionId: string) => void;
 }
 
-const TransactionTable = ({ title, transactions, actionButton }: { title: string, transactions: Transaction[], actionButton: (t: Transaction) => React.ReactNode }) => (
+const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const TransactionTable = ({ title, transactions, total, actionButton }: { title: string, transactions: Transaction[], total: number, actionButton: (t: Transaction) => React.ReactNode }) => (
   <Card className="shadow-lg border-indigo-100 dark:border-indigo-900">
     <CardHeader>
       <CardTitle className="flex items-center gap-2">{title} <Badge variant="secondary">{transactions.length}</Badge></CardTitle>
@@ -37,11 +39,18 @@ const TransactionTable = ({ title, transactions, actionButton }: { title: string
                 <TableCell>{t.date}</TableCell>
                 <TableCell>{t.description}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">{t.sourceFile}</TableCell>
-                <TableCell className="text-right font-medium">{t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                <TableCell className="text-right font-medium">{formatCurrency(t.amount)}</TableCell>
                 <TableCell>{actionButton(t)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
+          <TableFooter>
+            <TableRow>
+              <TableCell colSpan={3} className="font-bold">Total</TableCell>
+              <TableCell className="text-right font-bold">{formatCurrency(total)}</TableCell>
+              <TableCell></TableCell>
+            </TableRow>
+          </TableFooter>
         </Table>
       </div>
     </CardContent>
@@ -57,19 +66,25 @@ export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCat
   const totalInvoices = parseFloat(analysisData.totalInvoices.replace(',', '.')) || 0;
   const difference = totalTaxableAmount - totalInvoices;
 
-  const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
       <Card className="shadow-lg border-indigo-100 dark:border-indigo-900">
-        <CardHeader className="flex flex-row items-start justify-between">
-          <div>
-            <CardTitle className="text-xl font-semibold">Resultado da Análise</CardTitle>
-            <CardDescription>
-              Análise para {analysisData.cnpj} referente a {format(analysisData.competenceDate, "MMMM 'de' yyyy", { locale: ptBR })}
-            </CardDescription>
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-xl font-semibold">Resultado da Análise</CardTitle>
+              <CardDescription>
+                Análise para <strong>{analysisData.cnpj}</strong> referente a <strong>{format(analysisData.competenceDate, "MMMM 'de' yyyy", { locale: ptBR })}</strong>
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={() => {}} variant="outline" disabled>
+                <Printer className="mr-2 h-4 w-4" />
+                Imprimir Relatório
+              </Button>
+              <Button onClick={onBack} variant="outline">Nova Análise</Button>
+            </div>
           </div>
-          <Button onClick={onBack} variant="outline">Nova Análise</Button>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
           <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
@@ -95,6 +110,7 @@ export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCat
         <TransactionTable 
           title="Entradas Tributáveis"
           transactions={taxableTransactions}
+          total={totalTaxableAmount}
           actionButton={(t) => (
             <Button variant="ghost" size="icon" onClick={() => onToggleCategory(t.id)} title="Mover para Não Tributável">
               <ArrowRightCircle className="h-5 w-5 text-yellow-600" />
@@ -104,6 +120,7 @@ export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCat
         <TransactionTable 
           title="Entradas Não Tributáveis"
           transactions={nonTaxableTransactions}
+          total={totalNonTaxableAmount}
           actionButton={(t) => (
             <Button variant="ghost" size="icon" onClick={() => onToggleCategory(t.id)} title="Mover para Tributável">
               <ArrowLeftCircle className="h-5 w-5 text-green-600" />
