@@ -17,7 +17,7 @@ const Index = () => {
   const handleProcessAnalysis = async (data: AnalysisData, files: File[]) => {
     setIsProcessing(true);
     try {
-      const parsedTransactions = await parseCsvFiles(files);
+      const parsedTransactions = await parseCsvFiles(files, data.cnpj, data.cpf);
       
       parsedTransactions.sort((a, b) => {
         const dateA = a.date.split('/').reverse().join('');

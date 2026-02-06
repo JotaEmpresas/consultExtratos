@@ -94,17 +94,25 @@ const parsePagSeguro = (data: any[], fileName: string): Transaction[] => {
 };
 
 // Parser para o formato Itaú
-const parseItau = (data: any[], fileName: string): Transaction[] => {
+const parseItau = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
+  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
+  const cleanPartnerCpf = partnerCpf.replace(/\D/g, '');
+
   return data
     .filter(row => row['Valor (R$)'] && parseCurrency(row['Valor (R$)']) > 0)
-    .map((row, index) => ({
-      id: `${fileName}-itau-${index}`,
-      date: row['Data'],
-      description: row['Lançamento'],
-      amount: parseCurrency(row['Valor (R$)']),
-      sourceFile: fileName,
-      category: 'taxable',
-    }));
+    .map((row, index) => {
+      const sourceCnpjCpf = row['CNPJ/CPF']?.replace(/\D/g, '');
+      const isOwnAccount = sourceCnpjCpf && (sourceCnpjCpf === cleanCompanyCnpj || sourceCnpjCpf === cleanPartnerCpf);
+      
+      return {
+        id: `${fileName}-itau-${index}`,
+        date: row['Data'],
+        description: row['Lançamento'],
+        amount: parseCurrency(row['Valor (R$)']),
+        sourceFile: fileName,
+        category: isOwnAccount ? 'non-taxable' : 'taxable',
+      };
+    });
 };
 
 // Helper to check for headers case-insensitively
@@ -113,7 +121,7 @@ const hasHeaders = (actualHeaders: string[], requiredHeaders: string[]): boolean
   return requiredHeaders.every(rh => lowercasedActual.includes(rh.toLowerCase()));
 };
 
-const detectAndParse = (data: any[], fileName: string): Transaction[] => {
+const detectAndParse = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
   if (!data || data.length === 0) {
     return [];
   }
@@ -121,7 +129,7 @@ const detectAndParse = (data: any[], fileName: string): Transaction[] => {
   
   // Detecção do Itaú
   if (hasHeaders(headers, ['Data', 'Lançamento', 'Valor (R$)'])) {
-    return parseItau(data, fileName);
+    return parseItau(data, fileName, companyCnpj, partnerCpf);
   }
 
   // Detecção do Cora (original)
@@ -153,7 +161,7 @@ const detectAndParse = (data: any[], fileName: string): Transaction[] => {
   return [];
 };
 
-export const parseCsvFiles = (files: File[]): Promise<Transaction[]> => {
+export const parseCsvFiles = (files: File[], companyCnpj: string, partnerCpf: string): Promise<Transaction[]> => {
   const promises = files.map(file => {
     return new Promise<Transaction[]>((resolve, reject) => {
       Papa.parse(file, {
@@ -161,7 +169,7 @@ export const parseCsvFiles = (files: File[]): Promise<Transaction[]> => {
         skipEmptyLines: true,
         complete: (results) => {
           try {
-            const transactions = detectAndParse(results.data, file.name);
+            const transactions = detectAndParse(results.data, file.name, companyCnpj, partnerCpf);
             resolve(transactions);
           } catch (error) {
             console.error(`Erro ao processar o arquivo ${file.name}:`, error);
