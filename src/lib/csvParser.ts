@@ -93,6 +93,20 @@ const parsePagSeguro = (data: any[], fileName: string): Transaction[] => {
       }));
 };
 
+// Parser para o formato Itaú
+const parseItau = (data: any[], fileName: string): Transaction[] => {
+  return data
+    .filter(row => row['Valor (R$)'] && parseCurrency(row['Valor (R$)']) > 0)
+    .map((row, index) => ({
+      id: `${fileName}-itau-${index}`,
+      date: row['Data'],
+      description: row['Lançamento'],
+      amount: parseCurrency(row['Valor (R$)']),
+      sourceFile: fileName,
+      category: 'taxable',
+    }));
+};
+
 // Helper to check for headers case-insensitively
 const hasHeaders = (actualHeaders: string[], requiredHeaders: string[]): boolean => {
   const lowercasedActual = actualHeaders.map(h => h.toLowerCase());
@@ -105,6 +119,11 @@ const detectAndParse = (data: any[], fileName: string): Transaction[] => {
   }
   const headers = Object.keys(data[0] || {});
   
+  // Detecção do Itaú
+  if (hasHeaders(headers, ['Data', 'Lançamento', 'Valor (R$)'])) {
+    return parseItau(data, fileName);
+  }
+
   // Detecção do Cora (original)
   if (hasHeaders(headers, ['Data', 'Histórico', 'Valor (R$)', 'Tipo'])) {
     return parseCora(data, fileName);
