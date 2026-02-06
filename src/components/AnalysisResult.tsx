@@ -124,13 +124,28 @@ const PrintableReport = ({ transactions, analysisData }: { transactions: Transac
           const nonTaxable = bankTransactions.filter(t => t.category === 'non-taxable');
           const totalTaxable = taxable.reduce((sum, t) => sum + t.amount, 0);
           const totalNonTaxable = nonTaxable.reduce((sum, t) => sum + t.amount, 0);
+          const totalForBank = totalTaxable + totalNonTaxable;
 
           return (
             <div key={bankName} className="p-4 border rounded-lg break-inside-avoid">
-              <h2 className="text-xl font-bold mb-4 border-b pb-2">{bankName}</h2>
+              <h2 className="text-xl font-bold mb-2 border-b pb-2">{bankName}</h2>
+              <div className="grid grid-cols-3 gap-4 text-center my-4 text-sm">
+                <div className="p-2 bg-gray-100 rounded">
+                    <p className="font-semibold">Tributável</p>
+                    <p>{formatCurrency(totalTaxable)}</p>
+                </div>
+                <div className="p-2 bg-gray-100 rounded">
+                    <p className="font-semibold">Não Tributável</p>
+                    <p>{formatCurrency(totalNonTaxable)}</p>
+                </div>
+                <div className="p-2 bg-gray-200 rounded">
+                    <p className="font-bold">Total do Extrato</p>
+                    <p className="font-bold">{formatCurrency(totalForBank)}</p>
+                </div>
+              </div>
               <div className="space-y-6">
-                {taxable.length > 0 && <PrintableTable title="Entradas Tributáveis" transactions={taxable} total={totalTaxable} />}
-                {nonTaxable.length > 0 && <PrintableTable title="Entradas Não Tributáveis" transactions={nonTaxable} total={totalNonTaxable} />}
+                {taxable.length > 0 && <PrintableTable title="Detalhe - Entradas Tributáveis" transactions={taxable} total={totalTaxable} />}
+                {nonTaxable.length > 0 && <PrintableTable title="Detalhe - Entradas Não Tributáveis" transactions={nonTaxable} total={totalNonTaxable} />}
               </div>
             </div>
           );
