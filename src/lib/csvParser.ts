@@ -1,11 +1,26 @@
 import Papa from 'papaparse';
 import { Transaction } from '@/types';
 
-// Helper para converter moeda brasileira (ex: "1.234,56") para número
-const parseBrazilianCurrency = (value: string): number => {
-  if (!value) return 0;
-  const cleanedValue = value.replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, '');
-  return parseFloat(cleanedValue) || 0;
+// Helper para converter moeda para número, tratando formatos brasileiros e internacionais.
+const parseCurrency = (value: string): number => {
+  if (typeof value !== 'string' || !value) {
+    return 0;
+  }
+
+  const cleanedValue = value.trim();
+
+  // Se contém vírgula, assume que é o separador decimal (formato brasileiro)
+  // e que pontos são separadores de milhar. Ex: "1.234,56"
+  if (cleanedValue.includes(',')) {
+    const numericString = cleanedValue.replace(/\./g, '').replace(',', '.');
+    return parseFloat(numericString) || 0;
+  }
+
+  // Se não contém vírgula, assume que o ponto é o separador decimal (se existir).
+  // Ex: "1234.56"
+  // Remove caracteres não numéricos, exceto o ponto decimal e o sinal de menos.
+  const numericString = cleanedValue.replace(/[^0-9.-]/g, '');
+  return parseFloat(numericString) || 0;
 };
 
 // Parser para o formato Cora (original)
@@ -16,7 +31,7 @@ const parseCora = (data: any[], fileName: string): Transaction[] => {
       id: `${fileName}-cora-${index}`,
       date: row['Data'],
       description: row['Histórico'],
-      amount: parseBrazilianCurrency(row['Valor (R$)']),
+      amount: parseCurrency(row['Valor (R$)']),
       sourceFile: fileName,
       category: 'taxable',
     }));
@@ -30,7 +45,7 @@ const parseBancoTradicional = (data: any[], fileName:string): Transaction[] => {
         id: `${fileName}-bb-${index}`,
         date: row['Data'],
         description: row['Histórico'],
-        amount: parseBrazilianCurrency(row['Valor']),
+        amount: parseCurrency(row['Valor']),
         sourceFile: fileName,
         category: 'taxable',
       }));
@@ -39,12 +54,12 @@ const parseBancoTradicional = (data: any[], fileName:string): Transaction[] => {
 // Parser para o formato PagBank
 const parsePagBank = (data: any[], fileName: string): Transaction[] => {
   return data
-    .filter(row => row['Valor bruto'] && parseBrazilianCurrency(row['Valor bruto']) > 0)
+    .filter(row => row['Valor bruto'] && parseCurrency(row['Valor bruto']) > 0)
     .map((row, index) => ({
       id: `${fileName}-pagbank-${index}`,
       date: row['Data da transação'],
       description: row['Descrição'],
-      amount: parseBrazilianCurrency(row['Valor bruto']),
+      amount: parseCurrency(row['Valor bruto']),
       sourceFile: fileName,
       category: 'taxable',
     }));
@@ -58,7 +73,7 @@ const parseInter = (data: any[], fileName: string): Transaction[] => {
       id: `${fileName}-inter-${index}`,
       date: row['Data'],
       description: row['Identificação'] || row['Transação'],
-      amount: parseBrazilianCurrency(row['Valor']),
+      amount: parseCurrency(row['Valor']),
       sourceFile: fileName,
       category: 'taxable',
     }));
@@ -67,12 +82,12 @@ const parseInter = (data: any[], fileName: string): Transaction[] => {
 // Parser para o formato PagSeguro (2026-01-01_2026-01-31W.csv)
 const parsePagSeguro = (data: any[], fileName: string): Transaction[] => {
     return data
-      .filter(row => row['VALOR'] && parseBrazilianCurrency(row['VALOR']) > 0)
+      .filter(row => row['VALOR'] && parseCurrency(row['VALOR']) > 0)
       .map((row, index) => ({
         id: `${fileName}-pagseguro-${index}`,
         date: row['DATA'],
         description: row['DESCRICAO'] || row['TIPO'],
-        amount: parseBrazilianCurrency(row['VALOR']),
+        amount: parseCurrency(row['VALOR']),
         sourceFile: fileName,
         category: 'taxable',
       }));
