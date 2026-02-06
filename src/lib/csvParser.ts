@@ -8,7 +8,7 @@ const parseBrazilianCurrency = (value: string): number => {
   return parseFloat(cleanedValue) || 0;
 };
 
-// Parser para o formato Cora
+// Parser para o formato Cora (original)
 const parseCora = (data: any[], fileName: string): Transaction[] => {
   return data
     .filter(row => row['Tipo'] === 'CRÉDITO' && row['Valor (R$)'])
@@ -50,23 +50,69 @@ const parsePagBank = (data: any[], fileName: string): Transaction[] => {
     }));
 };
 
+// Parser para o formato Inter (cora_01_a31_Janeiro.csv)
+const parseInter = (data: any[], fileName: string): Transaction[] => {
+  return data
+    .filter(row => row['Tipo Transação'] === 'CRÉDITO' && row['Valor'])
+    .map((row, index) => ({
+      id: `${fileName}-inter-${index}`,
+      date: row['Data'],
+      description: row['Identificação'] || row['Transação'],
+      amount: parseBrazilianCurrency(row['Valor']),
+      sourceFile: fileName,
+      category: 'taxable',
+    }));
+};
+
+// Parser para o formato PagSeguro (2026-01-01_2026-01-31W.csv)
+const parsePagSeguro = (data: any[], fileName: string): Transaction[] => {
+    return data
+      .filter(row => row['VALOR'] && parseBrazilianCurrency(row['VALOR']) > 0)
+      .map((row, index) => ({
+        id: `${fileName}-pagseguro-${index}`,
+        date: row['DATA'],
+        description: row['DESCRICAO'] || row['TIPO'],
+        amount: parseBrazilianCurrency(row['VALOR']),
+        sourceFile: fileName,
+        category: 'taxable',
+      }));
+};
+
+// Helper to check for headers case-insensitively
+const hasHeaders = (actualHeaders: string[], requiredHeaders: string[]): boolean => {
+  const lowercasedActual = actualHeaders.map(h => h.toLowerCase());
+  return requiredHeaders.every(rh => lowercasedActual.includes(rh.toLowerCase()));
+};
 
 const detectAndParse = (data: any[], fileName: string): Transaction[] => {
+  if (!data || data.length === 0) {
+    return [];
+  }
   const headers = Object.keys(data[0] || {});
   
-  // Detecção do Cora
-  if (headers.includes('Data') && headers.includes('Histórico') && headers.includes('Valor (R$)') && headers.includes('Tipo')) {
+  // Detecção do Cora (original)
+  if (hasHeaders(headers, ['Data', 'Histórico', 'Valor (R$)', 'Tipo'])) {
     return parseCora(data, fileName);
   }
 
   // Detecção do Banco Tradicional
-  if (headers.includes('Data') && headers.includes('Histórico') && headers.includes('Valor') && headers.includes('Sinal')) {
+  if (hasHeaders(headers, ['Data', 'Histórico', 'Valor', 'Sinal'])) {
     return parseBancoTradicional(data, fileName);
   }
 
   // Detecção do PagBank
-  if (headers.includes('Data da transação') && headers.includes('Descrição') && headers.includes('Valor bruto')) {
+  if (hasHeaders(headers, ['Data da transação', 'Descrição', 'Valor bruto'])) {
     return parsePagBank(data, fileName);
+  }
+
+  // Detecção do Inter (cora_01_a31_Janeiro.csv)
+  if (hasHeaders(headers, ['Data', 'Transação', 'Tipo Transação', 'Valor'])) {
+    return parseInter(data, fileName);
+  }
+
+  // Detecção do PagSeguro (2026-01-01_2026-01-31W.csv)
+  if (hasHeaders(headers, ['DATA', 'TIPO', 'DESCRICAO', 'VALOR'])) {
+    return parsePagSeguro(data, fileName);
   }
 
   console.warn(`Formato de arquivo não reconhecido para: ${fileName}`);
