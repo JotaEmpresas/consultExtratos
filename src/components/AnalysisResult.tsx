@@ -118,6 +118,28 @@ const PrintableReport = ({ transactions, analysisData }: { transactions: Transac
         <div><p className="text-sm">Diferença</p><p className="font-bold">{formatCurrency(difference)}</p></div>
       </div>
 
+      <div className="mb-8" style={{ pageBreakAfter: 'always' }}>
+        <h2 className="text-xl font-bold mb-4 text-center">Resumo por Extrato</h2>
+        <div className="grid grid-cols-2 gap-4">
+          {Object.entries(groupedByBank).map(([bankName, bankTransactions]) => {
+            const totalTaxable = bankTransactions.filter(t => t.category === 'taxable').reduce((sum, t) => sum + t.amount, 0);
+            const totalNonTaxable = bankTransactions.filter(t => t.category === 'non-taxable').reduce((sum, t) => sum + t.amount, 0);
+            const totalForBank = totalTaxable + totalNonTaxable;
+
+            return (
+              <div key={bankName} className="p-4 border rounded-lg" style={{ breakInside: 'avoid' }}>
+                <h3 className="font-bold text-lg mb-2 truncate">{bankName}</h3>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between"><span>Tributável:</span> <span className="font-medium">{formatCurrency(totalTaxable)}</span></div>
+                  <div className="flex justify-between"><span>Não Tributável:</span> <span className="font-medium">{formatCurrency(totalNonTaxable)}</span></div>
+                  <div className="flex justify-between border-t pt-1 mt-1"><strong>Total:</strong> <strong>{formatCurrency(totalForBank)}</strong></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="space-y-8">
         {Object.entries(groupedByBank).map(([bankName, bankTransactions]) => {
           const taxable = bankTransactions.filter(t => t.category === 'taxable');
@@ -127,7 +149,7 @@ const PrintableReport = ({ transactions, analysisData }: { transactions: Transac
           const totalForBank = totalTaxable + totalNonTaxable;
 
           return (
-            <div key={bankName} className="p-4 border rounded-lg break-inside-avoid">
+            <div key={bankName} className="p-4 border rounded-lg" style={{ breakInside: 'avoid' }}>
               <h2 className="text-xl font-bold mb-2 border-b pb-2">{bankName}</h2>
               <div className="grid grid-cols-3 gap-4 text-center my-4 text-sm">
                 <div className="p-2 bg-gray-100 rounded">
