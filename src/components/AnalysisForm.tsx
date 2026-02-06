@@ -8,11 +8,17 @@ import { Button } from "@/components/ui/button";
 import { FileUpload } from "@/components/FileUpload";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { AnalysisData } from '@/types';
 
-export const AnalysisForm = () => {
+interface AnalysisFormProps {
+  onSubmit: (data: AnalysisData, files: File[]) => void;
+  isProcessing: boolean;
+}
+
+export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
   const [cnpj, setCnpj] = useState('');
   const [cpf, setCpf] = useState('');
   const [totalInvoices, setTotalInvoices] = useState('');
@@ -46,19 +52,18 @@ export const AnalysisForm = () => {
     setTotalInvoices(numericValue);
   };
 
-  const isFormValid = cnpj.length === 18 && cpf.length === 14 && files.length > 0 && competenceDate;
+  const isFormValid = cnpj.length === 18 && cpf.length === 14 && files.length > 0 && competenceDate && !isProcessing;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
-    // A lógica para processar os arquivos (Fase 2) será adicionada aqui.
-    console.log({
+    if (!isFormValid || !competenceDate) return;
+    
+    onSubmit({
       cnpj,
       cpf,
       totalInvoices: totalInvoices || '0',
       competenceDate,
-      files
-    });
+    }, files);
   };
 
   return (
@@ -114,7 +119,14 @@ export const AnalysisForm = () => {
           </div>
 
           <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3" disabled={!isFormValid}>
-            Processar Análise
+            {isProcessing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Processando...
+              </>
+            ) : (
+              'Processar Análise'
+            )}
           </Button>
         </form>
       </CardContent>
