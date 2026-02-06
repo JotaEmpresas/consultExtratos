@@ -18,6 +18,7 @@ const parseCora = (data: any[], fileName: string): Transaction[] => {
       description: row['Histórico'],
       amount: parseBrazilianCurrency(row['Valor (R$)']),
       sourceFile: fileName,
+      category: 'taxable',
     }));
 };
 
@@ -31,6 +32,7 @@ const parseBancoTradicional = (data: any[], fileName:string): Transaction[] => {
         description: row['Histórico'],
         amount: parseBrazilianCurrency(row['Valor']),
         sourceFile: fileName,
+        category: 'taxable',
       }));
 }
 
@@ -44,6 +46,7 @@ const parsePagBank = (data: any[], fileName: string): Transaction[] => {
       description: row['Descrição'],
       amount: parseBrazilianCurrency(row['Valor bruto']),
       sourceFile: fileName,
+      category: 'taxable',
     }));
 };
 

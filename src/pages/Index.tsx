@@ -19,7 +19,6 @@ const Index = () => {
     try {
       const parsedTransactions = await parseCsvFiles(files);
       
-      // Ordenar transações por data (assumindo formato DD/MM/YYYY)
       parsedTransactions.sort((a, b) => {
         const dateA = a.date.split('/').reverse().join('');
         const dateB = b.date.split('/').reverse().join('');
@@ -36,6 +35,16 @@ const Index = () => {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleToggleTransactionCategory = (transactionId: string) => {
+    setTransactions(prevTransactions =>
+      prevTransactions.map(t =>
+        t.id === transactionId
+          ? { ...t, category: t.category === 'taxable' ? 'non-taxable' : 'taxable' }
+          : t
+      )
+    );
   };
 
   const handleNewAnalysis = () => {
@@ -59,7 +68,8 @@ const Index = () => {
           <AnalysisResult 
             transactions={transactions} 
             analysisData={analysisData}
-            onBack={handleNewAnalysis} 
+            onBack={handleNewAnalysis}
+            onToggleCategory={handleToggleTransactionCategory}
           />
         )}
       </main>
