@@ -15,6 +15,10 @@ const formats = [
     fields: ["Data", "Lançamento", "Valor (R$)", "CNPJ/CPF (Opcional)"],
   },
   {
+    name: "C6 Bank",
+    fields: ["Data Lançamento", "Título", "Entrada(R$)"],
+  },
+  {
     name: "Cora",
     fields: ["Data", "Histórico", "Valor (R$)", "Tipo"],
   },
