@@ -18,6 +18,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ files, setFiles }) => {
     onDrop,
     accept: {
       'text/csv': ['.csv'],
+      'application/ofx': ['.ofx'],
     },
   });
 
@@ -40,7 +41,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ files, setFiles }) => {
           ) : (
             <p>Arraste e solte os arquivos aqui, ou clique para selecionar</p>
           )}
-          <p className="text-xs">Apenas arquivos .csv são permitidos</p>
+          <p className="text-xs">Apenas arquivos .csv e .ofx são permitidos</p>
         </div>
       </div>
       {files.length > 0 && (

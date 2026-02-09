@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AnalysisForm } from "@/components/AnalysisForm";
 import { AnalysisResult } from "@/components/AnalysisResult";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { parseCsvFiles } from "@/lib/csvParser";
+import { parseFiles } from "@/lib/fileParser";
 import { showError, showSuccess, showLoading, dismissToast } from "@/utils/toast";
 import { Transaction, AnalysisData, AiAnalysisResult } from "@/types";
 import { SettingsSheet } from "@/components/SettingsSheet";
@@ -21,7 +21,7 @@ const Index = () => {
   const handleProcessAnalysis = async (data: AnalysisData, files: File[]) => {
     setIsProcessing(true);
     try {
-      const parsedTransactions = await parseCsvFiles(files, data.cnpj, data.cpf);
+      const parsedTransactions = await parseFiles(files, data.cnpj, data.cpf);
       
       parsedTransactions.sort((a, b) => {
         const dateA = a.date.split('/').reverse().join('');

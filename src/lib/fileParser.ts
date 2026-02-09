@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 import { Transaction } from '@/types';
+import { parseOfxFile } from './ofxParser';
 
 // Helper para converter moeda para número, tratando formatos brasileiros e internacionais.
 const parseCurrency = (value: string): number => {
@@ -266,54 +267,67 @@ const detectAndParse = (data: any[], fileName: string, companyCnpj: string, part
   return [];
 };
 
-export const parseCsvFiles = (files: File[], companyCnpj: string, partnerCpf: string): Promise<Transaction[]> => {
+export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: string): Promise<Transaction[]> => {
   const promises = files.map(file => {
     return new Promise<Transaction[]>((resolve, reject) => {
       const reader = new FileReader();
 
-      reader.onload = (event) => {
-        let fileContent = event.target?.result as string;
-        let delimiter: string | undefined = undefined; // Let PapaParse auto-detect by default
-
-        // Pre-process content for C6 Bank
-        const c6HeaderKeyword = 'Data Lançamento,Data Contábil,Título';
-        if (fileContent.includes(c6HeaderKeyword)) {
-          const lines = fileContent.split(/\r?\n/);
-          const headerIndex = lines.findIndex(line => line.trim().startsWith(c6HeaderKeyword));
-          if (headerIndex !== -1) {
-            fileContent = lines.slice(headerIndex).join('\n');
-          }
-        }
-
-        // Pre-process content for Mercado Pago
-        const mpHeaderKeyword = 'RELEASE_DATE;TRANSACTION_TYPE;REFERENCE_ID';
-        if (fileContent.includes(mpHeaderKeyword)) {
-          delimiter = ';'; // Set delimiter for Mercado Pago
-          const lines = fileContent.split(/\r?\n/);
-          const headerIndex = lines.findIndex(line => line.trim().startsWith(mpHeaderKeyword));
-          if (headerIndex !== -1) {
-            fileContent = lines.slice(headerIndex).join('\n');
-          }
-        }
-
-        Papa.parse(fileContent, {
-          header: true,
-          skipEmptyLines: true,
-          delimiter: delimiter,
-          complete: (results) => {
-            try {
-              const transactions = detectAndParse(results.data, file.name, companyCnpj, partnerCpf);
-              resolve(transactions);
-            } catch (error) {
-              console.error(`Erro ao processar o arquivo ${file.name}:`, error);
-              reject(error);
-            }
-          },
-          error: (error) => {
-            console.error(`Erro ao ler o arquivo ${file.name}:`, error);
+      reader.onload = async (event) => {
+        const fileContent = event.target?.result as string;
+        
+        if (file.name.toLowerCase().endsWith('.ofx')) {
+          try {
+            const transactions = await parseOfxFile(fileContent, file.name, companyCnpj, partnerCpf);
+            resolve(transactions);
+          } catch (error) {
+            console.error(`Erro ao processar o arquivo OFX ${file.name}:`, error);
             reject(error);
-          },
-        });
+          }
+        } else if (file.name.toLowerCase().endsWith('.csv')) {
+          let processedContent = fileContent;
+          let delimiter: string | undefined = undefined;
+
+          const c6HeaderKeyword = 'Data Lançamento,Data Contábil,Título';
+          if (processedContent.includes(c6HeaderKeyword)) {
+            const lines = processedContent.split(/\r?\n/);
+            const headerIndex = lines.findIndex(line => line.trim().startsWith(c6HeaderKeyword));
+            if (headerIndex !== -1) {
+              processedContent = lines.slice(headerIndex).join('\n');
+            }
+          }
+
+          const mpHeaderKeyword = 'RELEASE_DATE;TRANSACTION_TYPE;REFERENCE_ID';
+          if (processedContent.includes(mpHeaderKeyword)) {
+            delimiter = ';';
+            const lines = processedContent.split(/\r?\n/);
+            const headerIndex = lines.findIndex(line => line.trim().startsWith(mpHeaderKeyword));
+            if (headerIndex !== -1) {
+              processedContent = lines.slice(headerIndex).join('\n');
+            }
+          }
+
+          Papa.parse(processedContent, {
+            header: true,
+            skipEmptyLines: true,
+            delimiter: delimiter,
+            complete: (results) => {
+              try {
+                const transactions = detectAndParse(results.data, file.name, companyCnpj, partnerCpf);
+                resolve(transactions);
+              } catch (error) {
+                console.error(`Erro ao processar o arquivo ${file.name}:`, error);
+                reject(error);
+              }
+            },
+            error: (error) => {
+              console.error(`Erro ao ler o arquivo ${file.name}:`, error);
+              reject(error);
+            },
+          });
+        } else {
+          console.warn(`Tipo de arquivo não suportado: ${file.name}`);
+          resolve([]);
+        }
       };
 
       reader.onerror = (error) => {
