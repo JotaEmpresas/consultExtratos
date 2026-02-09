@@ -4,14 +4,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Button } from './ui/button';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowRightCircle, ArrowLeftCircle, Printer, Banknote } from 'lucide-react';
+import { ArrowRightCircle, ArrowLeftCircle, Printer, Banknote, BrainCircuit, Loader2 } from 'lucide-react';
 import { Badge } from './ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
 interface AnalysisResultProps {
   transactions: Transaction[];
   analysisData: AnalysisData;
   onBack: () => void;
   onToggleCategory: (transactionId: string) => void;
+  onAiAnalysis: (type: 'prod' | 'test') => void;
+  isAiProcessing: boolean;
 }
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -177,7 +180,7 @@ const PrintableReport = ({ transactions, analysisData }: { transactions: Transac
   );
 };
 
-export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCategory }: AnalysisResultProps) => {
+export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCategory, onAiAnalysis, isAiProcessing }: AnalysisResultProps) => {
   const totalTaxableAmount = transactions.filter(t => t.category === 'taxable').reduce((sum, t) => sum + t.amount, 0);
   const totalNonTaxableAmount = transactions.filter(t => t.category === 'non-taxable').reduce((sum, t) => sum + t.amount, 0);
   const totalInvoices = parseFloat(analysisData.totalInvoices.replace(',', '.')) || 0;
@@ -203,6 +206,18 @@ export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCat
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button disabled={isAiProcessing}>
+                      {isAiProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BrainCircuit className="mr-2 h-4 w-4" />}
+                      Analisar com IA
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => onAiAnalysis('prod')}>Produção</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onAiAnalysis('test')}>Teste</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button onClick={() => window.print()} variant="outline"><Printer className="mr-2 h-4 w-4" />Imprimir</Button>
                 <Button onClick={onBack} variant="outline">Nova Análise</Button>
               </div>

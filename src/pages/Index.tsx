@@ -3,16 +3,20 @@ import { AnalysisForm } from "@/components/AnalysisForm";
 import { AnalysisResult } from "@/components/AnalysisResult";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { parseCsvFiles } from "@/lib/csvParser";
-import { showError, showSuccess } from "@/utils/toast";
-import { Transaction, AnalysisData } from "@/types";
+import { showError, showSuccess, showLoading, dismissToast } from "@/utils/toast";
+import { Transaction, AnalysisData, AiAnalysisResult } from "@/types";
+import { SettingsSheet } from "@/components/SettingsSheet";
+import { AIComparisonReport } from "@/components/AIComparisonReport";
 
-type AnalysisStep = 'input' | 'result';
+type AnalysisStep = 'input' | 'result' | 'ai-comparison';
 
 const Index = () => {
   const [step, setStep] = useState<AnalysisStep>('input');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<AiAnalysisResult | null>(null);
 
   const handleProcessAnalysis = async (data: AnalysisData, files: File[]) => {
     setIsProcessing(true);
@@ -51,14 +55,58 @@ const Index = () => {
     setStep('input');
     setTransactions([]);
     setAnalysisData(null);
+    setAiAnalysisResult(null);
+  };
+
+  const handleAiAnalysis = async (type: 'prod' | 'test') => {
+    const webhookUrl = localStorage.getItem(type === 'prod' ? 'prodWebhookUrl' : 'testWebhookUrl');
+    if (!webhookUrl) {
+      showError(`URL do webhook de ${type === 'prod' ? 'produção' : 'teste'} não configurado.`);
+      return;
+    }
+
+    setIsAiProcessing(true);
+    const toastId = showLoading('Enviando dados para análise da IA...');
+
+    try {
+      const payload = {
+        analysisData,
+        taxableTransactions: transactions.filter(t => t.category === 'taxable'),
+        nonTaxableTransactions: transactions.filter(t => t.category === 'non-taxable'),
+      };
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na comunicação com o webhook: ${response.statusText}`);
+      }
+
+      const result: AiAnalysisResult = await response.json();
+      setAiAnalysisResult(result);
+      setStep('ai-comparison');
+      dismissToast(toastId);
+      showSuccess('Análise da IA recebida com sucesso!');
+
+    } catch (error) {
+      console.error("Erro na análise com IA:", error);
+      dismissToast(toastId);
+      showError("Falha ao obter análise da IA.");
+    } finally {
+      setIsAiProcessing(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col">
-      <header className="py-4 no-print">
+      <header className="py-4 px-4 md:px-8 no-print flex justify-between items-center">
         <h1 className="text-3xl font-bold text-center text-indigo-600 dark:text-indigo-400">
           Analisador de Extratos
         </h1>
+        <SettingsSheet />
       </header>
       <main className="flex-grow container mx-auto p-4 md:p-8 print-container">
         {step === 'input' && (
@@ -70,6 +118,16 @@ const Index = () => {
             analysisData={analysisData}
             onBack={handleNewAnalysis}
             onToggleCategory={handleToggleTransactionCategory}
+            onAiAnalysis={handleAiAnalysis}
+            isAiProcessing={isAiProcessing}
+          />
+        )}
+        {step === 'ai-comparison' && analysisData && aiAnalysisResult && (
+          <AIComparisonReport
+            originalTransactions={transactions}
+            aiResult={aiAnalysisResult}
+            analysisData={analysisData}
+            onBack={handleNewAnalysis}
           />
         )}
       </main>

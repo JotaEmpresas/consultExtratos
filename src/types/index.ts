@@ -15,3 +15,10 @@ export interface AnalysisData {
   totalInvoices: string;
   competenceDate: Date;
 }
+
+export interface AiAnalysisResult {
+  analise: string;
+  "lista de Valores Tributados": Transaction[];
+  "Lista de Valores Possíveis não Tributáveis": Transaction[];
+  "legislação bse de conhecimento": string;
+}
