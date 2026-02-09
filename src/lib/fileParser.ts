@@ -7,21 +7,21 @@ const parseCurrency = (value: string): number => {
   if (typeof value !== 'string' || !value) {
     return 0;
   }
+  // Remove currency symbols, spaces, etc. but keep comma, dot, and minus sign
+  let cleanedValue = value.replace(/[^0-9,.-]/g, '').trim();
 
-  const cleanedValue = value.trim();
+  const hasComma = cleanedValue.includes(',');
+  const hasDot = cleanedValue.includes('.');
 
-  // Se contém vírgula, assume que é o separador decimal (formato brasileiro)
-  // e que pontos são separadores de milhar. Ex: "1.234,56"
-  if (cleanedValue.includes(',')) {
-    const numericString = cleanedValue.replace(/\./g, '').replace(',', '.');
-    return parseFloat(numericString) || 0;
+  // Check if it's a Brazilian format (e.g., "1.234,56") where comma is the decimal separator
+  if (hasComma && (!hasDot || cleanedValue.lastIndexOf(',') > cleanedValue.lastIndexOf('.'))) {
+    cleanedValue = cleanedValue.replace(/\./g, '').replace(',', '.');
+  } else {
+    // It's likely US/international format (e.g., "1,234.56"). Remove thousand separators.
+    cleanedValue = cleanedValue.replace(/,/g, '');
   }
-
-  // Se não contém vírgula, assume que o ponto é o separador decimal (se existir).
-  // Ex: "1234.56"
-  // Remove caracteres não numéricos, exceto o ponto decimal e o sinal de menos.
-  const numericString = cleanedValue.replace(/[^0-9.-]/g, '');
-  return parseFloat(numericString) || 0;
+  
+  return parseFloat(cleanedValue) || 0;
 };
 
 // Parser para o formato Nubank CSV
