@@ -8,3 +8,4 @@ Banco do Brasil
 PagBank
 Inter
 PagSeguro
+nunbank
