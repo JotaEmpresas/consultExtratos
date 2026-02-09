@@ -292,6 +292,7 @@ const detectAndParse = (data: any[], fileName: string, companyCnpj: string, part
   }
 
   console.warn(`Formato de arquivo não reconhecido para: ${fileName}`);
+  console.log('Cabeçalhos detectados:', headers);
   return [];
 };
 
@@ -375,7 +376,7 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
         reject(error);
       };
 
-      reader.readAsText(file, 'latin1');
+      reader.readAsText(file, 'UTF-8');
     });
   });
 
