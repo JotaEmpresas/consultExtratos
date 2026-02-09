@@ -24,6 +24,29 @@ const parseCurrency = (value: string): number => {
   return parseFloat(numericString) || 0;
 };
 
+// Parser para o formato Nubank CSV
+const parseNubankCsv = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
+  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
+  const cleanPartnerCpf = partnerCpf.replace(/\D/g, '');
+
+  return data
+    .filter(row => row['Valor'] && parseCurrency(row['Valor']) > 0)
+    .map((row) => {
+      const description = row['Descrição'] || '';
+      const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
+      const isInvestmentRedemption = description.toLowerCase().includes('resgate');
+
+      return {
+        id: row['Identificador'] || `${fileName}-nubank-csv-${Math.random()}`,
+        date: row['Data'],
+        description: description,
+        amount: parseCurrency(row['Valor']),
+        sourceFile: fileName,
+        category: (isOwnAccount || isInvestmentRedemption) ? 'non-taxable' : 'taxable',
+      };
+    });
+};
+
 // Parser para o formato C6 Bank
 const parseC6Bank = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
   const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
@@ -223,6 +246,11 @@ const detectAndParse = (data: any[], fileName: string, companyCnpj: string, part
   }
   const headers = Object.keys(data[0] || {});
   
+  // Detecção do Nubank CSV
+  if (hasHeaders(headers, ['Data', 'Valor', 'Identificador', 'Descrição'])) {
+    return parseNubankCsv(data, fileName, companyCnpj, partnerCpf);
+  }
+
   // Detecção do Mercado Pago
   if (hasHeaders(headers, ['RELEASE_DATE', 'TRANSACTION_TYPE', 'TRANSACTION_NET_AMOUNT'])) {
     return parseMercadoPago(data, fileName, companyCnpj, partnerCpf);

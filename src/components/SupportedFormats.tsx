@@ -11,8 +11,12 @@ import { List, FileText } from "lucide-react";
 
 const formats = [
   {
-    name: "Nubank",
+    name: "Nubank (.ofx)",
     fields: ["Arquivo .ofx"],
+  },
+  {
+    name: "Nubank (.csv)",
+    fields: ["Data", "Valor", "Identificador", "Descrição"],
   },
   {
     name: "Itaú",
