@@ -315,31 +315,34 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
           let processedContent = fileContent;
           let delimiter: string | undefined = undefined;
 
+          const normalizeHeaderLine = (line: string) => line.replace(/["\s]/g, '');
+          const lines = processedContent.split(/\r?\n/);
+
           const nubankHeaderKeyword = 'Data,Valor,Identificador,Descrição';
-          if (processedContent.includes(nubankHeaderKeyword)) {
-            const lines = processedContent.split(/\r?\n/);
-            const headerIndex = lines.findIndex(line => line.trim().startsWith(nubankHeaderKeyword));
-            if (headerIndex !== -1) {
-              processedContent = lines.slice(headerIndex).join('\n');
-            }
-          }
+          const normalizedNubankKeyword = normalizeHeaderLine(nubankHeaderKeyword);
+          const nubankHeaderIndex = lines.findIndex(line => normalizeHeaderLine(line.trim()) === normalizedNubankKeyword);
 
-          const c6HeaderKeyword = 'Data Lançamento,Data Contábil,Título';
-          if (processedContent.includes(c6HeaderKeyword)) {
-            const lines = processedContent.split(/\r?\n/);
-            const headerIndex = lines.findIndex(line => line.trim().startsWith(c6HeaderKeyword));
-            if (headerIndex !== -1) {
-              processedContent = lines.slice(headerIndex).join('\n');
+          if (nubankHeaderIndex !== -1) {
+            processedContent = lines.slice(nubankHeaderIndex).join('\n');
+            delimiter = ',';
+          } else {
+            const c6HeaderKeyword = 'Data Lançamento,Data Contábil,Título';
+            if (processedContent.includes(c6HeaderKeyword)) {
+              const c6lines = processedContent.split(/\r?\n/);
+              const headerIndex = c6lines.findIndex(line => line.trim().startsWith(c6HeaderKeyword));
+              if (headerIndex !== -1) {
+                processedContent = c6lines.slice(headerIndex).join('\n');
+              }
             }
-          }
 
-          const mpHeaderKeyword = 'RELEASE_DATE;TRANSACTION_TYPE;REFERENCE_ID';
-          if (processedContent.includes(mpHeaderKeyword)) {
-            delimiter = ';';
-            const lines = processedContent.split(/\r?\n/);
-            const headerIndex = lines.findIndex(line => line.trim().startsWith(mpHeaderKeyword));
-            if (headerIndex !== -1) {
-              processedContent = lines.slice(headerIndex).join('\n');
+            const mpHeaderKeyword = 'RELEASE_DATE;TRANSACTION_TYPE;REFERENCE_ID';
+            if (processedContent.includes(mpHeaderKeyword)) {
+              delimiter = ';';
+              const mpLines = processedContent.split(/\r?\n/);
+              const headerIndex = mpLines.findIndex(line => line.trim().startsWith(mpHeaderKeyword));
+              if (headerIndex !== -1) {
+                processedContent = mpLines.slice(headerIndex).join('\n');
+              }
             }
           }
 
