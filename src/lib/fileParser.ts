@@ -32,6 +32,7 @@ const parseBradesco = (data: any[], fileName: string, companyCnpj: string, partn
   const creditKey = Object.keys(data[0] || {}).find(k => k.includes('Crédito'));
   const descriptionKey = Object.keys(data[0] || {}).find(k => k.includes('Lançamento'));
   const dateKey = Object.keys(data[0] || {}).find(k => k.includes('Data'));
+  const docKey = Object.keys(data[0] || {}).find(k => k.includes('Dcto'));
 
   if (!creditKey || !descriptionKey || !dateKey) {
     return [];
@@ -52,9 +53,10 @@ const parseBradesco = (data: any[], fileName: string, companyCnpj: string, partn
     .map((row, index) => {
       const description = row[descriptionKey] || '';
       const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
+      const docNumber = docKey ? row[docKey] : index;
       
       return {
-        id: `${fileName}-bradesco-${index}`,
+        id: `${fileName}-bradesco-${row[dateKey]}-${docNumber}-${row[creditKey]}-${index}`,
         date: row[dateKey],
         description: description,
         amount: parseCurrency(row[creditKey]),
@@ -71,13 +73,13 @@ const parseNubankCsv = (data: any[], fileName: string, companyCnpj: string, part
 
   return data
     .filter(row => row['Valor'] && parseCurrency(row['Valor']) > 0)
-    .map((row) => {
+    .map((row, index) => {
       const description = row['Descrição'] || '';
       const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
       const isInvestmentRedemption = description.toLowerCase().includes('resgate');
 
       return {
-        id: row['Identificador'] || `${fileName}-nubank-csv-${Math.random()}`,
+        id: row['Identificador'] || `${fileName}-nubank-${row['Data']}-${row['Valor']}-${index}`,
         date: row['Data'],
         description: description,
         amount: parseCurrency(row['Valor']),
@@ -99,7 +101,7 @@ const parseC6Bank = (data: any[], fileName: string, companyCnpj: string, partner
       const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
 
       return {
-        id: `${fileName}-c6-${index}`,
+        id: `${fileName}-c6-${row['Data Lançamento']}-${row['Título']}-${index}`,
         date: row['Data Lançamento'],
         description: description,
         amount: parseCurrency(row['Entrada(R$)']),
@@ -127,7 +129,7 @@ const parseMercadoPago = (data: any[], fileName: string, companyCnpj: string, pa
       }
 
       return {
-        id: `${fileName}-mercadopago-${index}`,
+        id: `${fileName}-mercadopago-${row['RELEASE_DATE']}-${row['TRANSACTION_NET_AMOUNT']}-${index}`,
         date: formattedDate,
         description: description,
         amount: parseCurrency(row['TRANSACTION_NET_AMOUNT']),
@@ -149,7 +151,7 @@ const parseCora = (data: any[], fileName: string, companyCnpj: string, partnerCp
       const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
       
       return {
-        id: `${fileName}-cora-${index}`,
+        id: `${fileName}-cora-${row['Data']}-${row['Histórico']}-${index}`,
         date: row['Data'],
         description: description,
         amount: parseCurrency(row['Valor (R$)']),
@@ -171,7 +173,7 @@ const parseBancoTradicional = (data: any[], fileName:string, companyCnpj: string
         const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
 
         return {
-          id: `${fileName}-bb-${index}`,
+          id: `${fileName}-bb-${row['Data']}-${row['Histórico']}-${index}`,
           date: row['Data'],
           description: description,
           amount: parseCurrency(row['Valor']),
@@ -193,7 +195,7 @@ const parsePagBank = (data: any[], fileName: string, companyCnpj: string, partne
       const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
 
       return {
-        id: `${fileName}-pagbank-${index}`,
+        id: `${fileName}-pagbank-${row['Data da transação']}-${row['Descrição']}-${index}`,
         date: row['Data da transação'],
         description: description,
         amount: parseCurrency(row['Valor bruto']),
@@ -215,7 +217,7 @@ const parseInter = (data: any[], fileName: string, companyCnpj: string, partnerC
       const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
 
       return {
-        id: `${fileName}-inter-${index}`,
+        id: `${fileName}-inter-${row['Data']}-${row['Transação']}-${index}`,
         date: row['Data'],
         description: description,
         amount: parseCurrency(row['Valor']),
@@ -237,7 +239,7 @@ const parsePagSeguro = (data: any[], fileName: string, companyCnpj: string, part
         const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
 
         return {
-          id: `${fileName}-pagseguro-${index}`,
+          id: `${fileName}-pagseguro-${row['DATA']}-${row['DESCRICAO']}-${index}`,
           date: row['DATA'],
           description: description,
           amount: parseCurrency(row['VALOR']),
@@ -264,7 +266,7 @@ const parseItau = (data: any[], fileName: string, companyCnpj: string, partnerCp
       const isOwnAccount = isOwnAccountByCnpjCpfColumn || isOwnAccountByDescription;
       
       return {
-        id: `${fileName}-itau-${index}`,
+        id: `${fileName}-itau-${row['Data']}-${row['Lançamento']}-${index}`,
         date: row['Data'],
         description: description,
         amount: parseCurrency(row['Valor (R$)']),
