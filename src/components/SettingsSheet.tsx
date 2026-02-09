@@ -18,12 +18,13 @@ import { Settings } from "lucide-react";
 import { showSuccess } from '@/utils/toast';
 
 export function SettingsSheet() {
-  const [prodWebhook, setProdWebhook] = useState('');
-  const [testWebhook, setTestWebhook] = useState('');
+  const [prodWebhook, setProdWebhook] = useState('https://jota-empresas-n8n.ubjifz.easypanel.host/webhook/bd95e5ce-4ebf-48c9-b823-ad8b57429c7e');
+  const [testWebhook, setTestWebhook] = useState('https://jota-empresas-n8n.ubjifz.easypanel.host/webhook-test/bd95e5ce-4ebf-48c9-b823-ad8b57429c7e');
 
   useEffect(() => {
     const savedProdWebhook = localStorage.getItem('prodWebhookUrl');
     const savedTestWebhook = localStorage.getItem('testWebhookUrl');
+    // Only set from localStorage if it exists, otherwise keep the default
     if (savedProdWebhook) setProdWebhook(savedProdWebhook);
     if (savedTestWebhook) setTestWebhook(savedTestWebhook);
   }, []);
@@ -46,7 +47,7 @@ export function SettingsSheet() {
         <SheetHeader>
           <SheetTitle>Configurações</SheetTitle>
           <SheetDescription>
-            Configure os webhooks para integração com serviços externos como o n8n.
+            Configure os webhooks para integração. Para testar, use o webhook de "Teste". Para operações reais, use o de "Produção".
           </SheetDescription>
         </SheetHeader>
         <div className="grid gap-4 py-4">
@@ -58,7 +59,6 @@ export function SettingsSheet() {
               id="prod-webhook"
               value={prodWebhook}
               onChange={(e) => setProdWebhook(e.target.value)}
-              placeholder="https://.../webhook/..."
               className="col-span-3"
             />
           </div>
@@ -70,7 +70,6 @@ export function SettingsSheet() {
               id="test-webhook"
               value={testWebhook}
               onChange={(e) => setTestWebhook(e.target.value)}
-              placeholder="https://.../webhook-test/..."
               className="col-span-3"
             />
           </div>
