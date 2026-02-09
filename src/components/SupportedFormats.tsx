@@ -19,6 +19,10 @@ const formats = [
     fields: ["Data Lançamento", "Título", "Entrada(R$)"],
   },
   {
+    name: "Mercado Pago",
+    fields: ["RELEASE_DATE", "TRANSACTION_TYPE", "TRANSACTION_NET_AMOUNT"],
+  },
+  {
     name: "Cora",
     fields: ["Data", "Histórico", "Valor (R$)", "Tipo"],
   },

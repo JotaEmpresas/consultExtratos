@@ -45,6 +45,33 @@ const parseC6Bank = (data: any[], fileName: string, companyCnpj: string, partner
     });
 };
 
+// Parser para o formato Mercado Pago
+const parseMercadoPago = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
+  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
+  const cleanPartnerCpf = partnerCpf.replace(/\D/g, '');
+
+  return data
+    .filter(row => row['TRANSACTION_NET_AMOUNT'] && parseCurrency(row['TRANSACTION_NET_AMOUNT']) > 0)
+    .map((row, index) => {
+      const description = row['TRANSACTION_TYPE'] || '';
+      const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
+      
+      let formattedDate = row['RELEASE_DATE'];
+      // Convert DD-MM-YYYY to DD/MM/YYYY
+      if (formattedDate && /^\d{2}-\d{2}-\d{4}$/.test(formattedDate)) {
+        formattedDate = formattedDate.replace(/-/g, '/');
+      }
+
+      return {
+        id: `${fileName}-mercadopago-${index}`,
+        date: formattedDate,
+        description: description,
+        amount: parseCurrency(row['TRANSACTION_NET_AMOUNT']),
+        sourceFile: fileName,
+        category: isOwnAccount ? 'non-taxable' : 'taxable',
+      };
+    });
+};
 
 // Parser para o formato Cora (original)
 const parseCora = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
@@ -195,6 +222,11 @@ const detectAndParse = (data: any[], fileName: string, companyCnpj: string, part
   }
   const headers = Object.keys(data[0] || {});
   
+  // Detecção do Mercado Pago
+  if (hasHeaders(headers, ['RELEASE_DATE', 'TRANSACTION_TYPE', 'TRANSACTION_NET_AMOUNT'])) {
+    return parseMercadoPago(data, fileName, companyCnpj, partnerCpf);
+  }
+
   // Detecção do C6 Bank
   if (hasHeaders(headers, ['Data Lançamento', 'Título', 'Entrada(R$)'])) {
     return parseC6Bank(data, fileName, companyCnpj, partnerCpf);
@@ -241,12 +273,24 @@ export const parseCsvFiles = (files: File[], companyCnpj: string, partnerCpf: st
 
       reader.onload = (event) => {
         let fileContent = event.target?.result as string;
+        let delimiter: string | undefined = undefined; // Let PapaParse auto-detect by default
 
-        // Pre-process content to remove extra headers, specifically for C6 Bank format
-        const headerKeyword = 'Data Lançamento,Data Contábil,Título';
-        if (fileContent.includes(headerKeyword)) {
+        // Pre-process content for C6 Bank
+        const c6HeaderKeyword = 'Data Lançamento,Data Contábil,Título';
+        if (fileContent.includes(c6HeaderKeyword)) {
           const lines = fileContent.split(/\r?\n/);
-          const headerIndex = lines.findIndex(line => line.trim().startsWith(headerKeyword));
+          const headerIndex = lines.findIndex(line => line.trim().startsWith(c6HeaderKeyword));
+          if (headerIndex !== -1) {
+            fileContent = lines.slice(headerIndex).join('\n');
+          }
+        }
+
+        // Pre-process content for Mercado Pago
+        const mpHeaderKeyword = 'RELEASE_DATE;TRANSACTION_TYPE;REFERENCE_ID';
+        if (fileContent.includes(mpHeaderKeyword)) {
+          delimiter = ';'; // Set delimiter for Mercado Pago
+          const lines = fileContent.split(/\r?\n/);
+          const headerIndex = lines.findIndex(line => line.trim().startsWith(mpHeaderKeyword));
           if (headerIndex !== -1) {
             fileContent = lines.slice(headerIndex).join('\n');
           }
@@ -255,6 +299,7 @@ export const parseCsvFiles = (files: File[], companyCnpj: string, partnerCpf: st
         Papa.parse(fileContent, {
           header: true,
           skipEmptyLines: true,
+          delimiter: delimiter,
           complete: (results) => {
             try {
               const transactions = detectAndParse(results.data, file.name, companyCnpj, partnerCpf);
@@ -276,7 +321,7 @@ export const parseCsvFiles = (files: File[], companyCnpj: string, partnerCpf: st
         reject(error);
       };
 
-      reader.readAsText(file, 'UTF-8');
+      reader.readAsText(file, 'latin1');
     });
   });
 
