@@ -24,7 +24,6 @@ export function SettingsSheet() {
   useEffect(() => {
     const savedProdWebhook = localStorage.getItem('prodWebhookUrl');
     const savedTestWebhook = localStorage.getItem('testWebhookUrl');
-    // Only set from localStorage if it exists, otherwise keep the default
     if (savedProdWebhook) setProdWebhook(savedProdWebhook);
     if (savedTestWebhook) setTestWebhook(savedTestWebhook);
   }, []);
@@ -50,28 +49,32 @@ export function SettingsSheet() {
             Configure os webhooks para integração. Para testar, use o webhook de "Teste". Para operações reais, use o de "Produção".
           </SheetDescription>
         </SheetHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="prod-webhook" className="text-right">
+        <div className="grid gap-6 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="prod-webhook">
               Produção
             </Label>
             <Input
               id="prod-webhook"
               value={prodWebhook}
               onChange={(e) => setProdWebhook(e.target.value)}
-              className="col-span-3"
             />
+            <p className="text-xs text-muted-foreground break-all">
+              Use: https://jota-empresas-n8n.ubjifz.easypanel.host/webhook/bd95e5ce-4ebf-48c9-b823-ad8b57429c7e
+            </p>
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="test-webhook" className="text-right">
+          <div className="space-y-2">
+            <Label htmlFor="test-webhook">
               Teste
             </Label>
             <Input
               id="test-webhook"
               value={testWebhook}
               onChange={(e) => setTestWebhook(e.target.value)}
-              className="col-span-3"
             />
+             <p className="text-xs text-muted-foreground break-all">
+              Use: https://jota-empresas-n8n.ubjifz.easypanel.host/webhook-test/bd95e5ce-4ebf-48c9-b823-ad8b57429c7e
+            </p>
           </div>
         </div>
         <SheetFooter>
