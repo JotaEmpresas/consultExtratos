@@ -21,15 +21,28 @@ const Index = () => {
   const handleProcessAnalysis = async (data: AnalysisData, files: File[]) => {
     setIsProcessing(true);
     try {
-      const parsedTransactions = await parseFiles(files, data.cnpj, data.cpf);
+      const allParsedTransactions = await parseFiles(files, data.cnpj, data.cpf);
       
-      parsedTransactions.sort((a, b) => {
+      const selectedMonth = data.competenceDate.getMonth();
+      const selectedYear = data.competenceDate.getFullYear();
+
+      const filteredTransactions = allParsedTransactions.filter(t => {
+        if (!t.date || !/^\d{2}\/\d{2}\/\d{4}$/.test(t.date)) {
+          return false;
+        }
+        const parts = t.date.split('/');
+        const transactionMonth = parseInt(parts[1], 10) - 1;
+        const transactionYear = parseInt(parts[2], 10);
+        return transactionMonth === selectedMonth && transactionYear === selectedYear;
+      });
+
+      filteredTransactions.sort((a, b) => {
         const dateA = a.date.split('/').reverse().join('');
         const dateB = b.date.split('/').reverse().join('');
         return dateA.localeCompare(dateB);
       });
 
-      setTransactions(parsedTransactions);
+      setTransactions(filteredTransactions);
       setAnalysisData(data);
       setStep('result');
       showSuccess("Análise concluída com sucesso!");
