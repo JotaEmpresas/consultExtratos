@@ -9,3 +9,4 @@ PagBank
 Inter
 PagSeguro
 nunbank
+bradesco
