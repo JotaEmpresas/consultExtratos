@@ -365,7 +365,7 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
           if (processedContent.includes(';Extrato de:')) {
               delimiter = ';';
               const lines = processedContent.split(/\r?\n/);
-              const headerLine = lines.find(line => line.startsWith('Data;Lançamento'));
+              const headerLine = lines.find(line => line.trim().startsWith('Data;Lançamento'));
               
               if (headerLine) {
                   const dataLines = lines.filter(line => /^\d{2}\/\d{2}\/\d{4}/.test(line.trim()));
