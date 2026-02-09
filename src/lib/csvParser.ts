@@ -23,6 +23,29 @@ const parseCurrency = (value: string): number => {
   return parseFloat(numericString) || 0;
 };
 
+// Parser para o formato C6 Bank
+const parseC6Bank = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
+  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
+  const cleanPartnerCpf = partnerCpf.replace(/\D/g, '');
+
+  return data
+    .filter(row => row['Entrada(R$)'] && parseCurrency(row['Entrada(R$)']) > 0)
+    .map((row, index) => {
+      const description = row['Título'] || '';
+      const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
+
+      return {
+        id: `${fileName}-c6-${index}`,
+        date: row['Data Lançamento'],
+        description: description,
+        amount: parseCurrency(row['Entrada(R$)']),
+        sourceFile: fileName,
+        category: isOwnAccount ? 'non-taxable' : 'taxable',
+      };
+    });
+};
+
+
 // Parser para o formato Cora (original)
 const parseCora = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
   const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
@@ -172,6 +195,11 @@ const detectAndParse = (data: any[], fileName: string, companyCnpj: string, part
   }
   const headers = Object.keys(data[0] || {});
   
+  // Detecção do C6 Bank
+  if (hasHeaders(headers, ['Data Lançamento', 'Título', 'Entrada(R$)'])) {
+    return parseC6Bank(data, fileName, companyCnpj, partnerCpf);
+  }
+
   // Detecção do Itaú
   if (hasHeaders(headers, ['Data', 'Lançamento', 'Valor (R$)'])) {
     return parseItau(data, fileName, companyCnpj, partnerCpf);
@@ -209,23 +237,46 @@ const detectAndParse = (data: any[], fileName: string, companyCnpj: string, part
 export const parseCsvFiles = (files: File[], companyCnpj: string, partnerCpf: string): Promise<Transaction[]> => {
   const promises = files.map(file => {
     return new Promise<Transaction[]>((resolve, reject) => {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          try {
-            const transactions = detectAndParse(results.data, file.name, companyCnpj, partnerCpf);
-            resolve(transactions);
-          } catch (error) {
-            console.error(`Erro ao processar o arquivo ${file.name}:`, error);
-            reject(error);
+      const reader = new FileReader();
+
+      reader.onload = (event) => {
+        let fileContent = event.target?.result as string;
+
+        // Pre-process content to remove extra headers, specifically for C6 Bank format
+        const headerKeyword = 'Data Lançamento,Data Contábil,Título';
+        if (fileContent.includes(headerKeyword)) {
+          const lines = fileContent.split(/\r?\n/);
+          const headerIndex = lines.findIndex(line => line.trim().startsWith(headerKeyword));
+          if (headerIndex !== -1) {
+            fileContent = lines.slice(headerIndex).join('\n');
           }
-        },
-        error: (error) => {
-          console.error(`Erro ao ler o arquivo ${file.name}:`, error);
-          reject(error);
-        },
-      });
+        }
+
+        Papa.parse(fileContent, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            try {
+              const transactions = detectAndParse(results.data, file.name, companyCnpj, partnerCpf);
+              resolve(transactions);
+            } catch (error) {
+              console.error(`Erro ao processar o arquivo ${file.name}:`, error);
+              reject(error);
+            }
+          },
+          error: (error) => {
+            console.error(`Erro ao ler o arquivo ${file.name}:`, error);
+            reject(error);
+          },
+        });
+      };
+
+      reader.onerror = (error) => {
+        console.error(`Erro ao ler o arquivo ${file.name}:`, error);
+        reject(error);
+      };
+
+      reader.readAsText(file, 'UTF-8');
     });
   });
 
