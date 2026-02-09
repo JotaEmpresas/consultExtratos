@@ -46,6 +46,10 @@ const formats = [
     name: "PagSeguro",
     fields: ["DATA", "TIPO", "DESCRICAO", "VALOR"],
   },
+  {
+    name: "Bradesco",
+    fields: ["Data", "Lançamento", "Crédito (R$)"],
+  },
 ];
 
 export const SupportedFormats = () => {

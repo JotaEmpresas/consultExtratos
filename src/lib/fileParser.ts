@@ -24,6 +24,46 @@ const parseCurrency = (value: string): number => {
   return parseFloat(cleanedValue) || 0;
 };
 
+// Parser para o formato Bradesco
+const parseBradesco = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
+  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
+  const cleanPartnerCpf = partnerCpf.replace(/\D/g, '');
+
+  const creditKey = Object.keys(data[0] || {}).find(k => k.includes('Crédito'));
+  const descriptionKey = Object.keys(data[0] || {}).find(k => k.includes('Lançamento'));
+  const dateKey = Object.keys(data[0] || {}).find(k => k.includes('Data'));
+
+  if (!creditKey || !descriptionKey || !dateKey) {
+    return [];
+  }
+
+  return data
+    .filter(row => {
+      const creditValue = row[creditKey];
+      const description = row[descriptionKey];
+      const dateValue = row[dateKey];
+      
+      if (!dateValue || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) return false;
+      if (!description || description.toLowerCase().includes('saldo anterior')) return false;
+      if (!creditValue || parseCurrency(creditValue) <= 0) return false;
+
+      return true;
+    })
+    .map((row, index) => {
+      const description = row[descriptionKey] || '';
+      const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
+      
+      return {
+        id: `${fileName}-bradesco-${index}`,
+        date: row[dateKey],
+        description: description,
+        amount: parseCurrency(row[creditKey]),
+        sourceFile: fileName,
+        category: isOwnAccount ? 'non-taxable' : 'taxable',
+      };
+    });
+};
+
 // Parser para o formato Nubank CSV
 const parseNubankCsv = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
   const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
@@ -246,6 +286,11 @@ const detectAndParse = (data: any[], fileName: string, companyCnpj: string, part
   }
   const headers = Object.keys(data[0] || {});
   
+  // Detecção do Bradesco
+  if (hasHeaders(headers, ['Data', 'Lançamento', 'Crédito (R$)'])) {
+    return parseBradesco(data, fileName, companyCnpj, partnerCpf);
+  }
+
   // Detecção do Nubank CSV
   if (hasHeaders(headers, ['Data', 'Valor', 'Identificador', 'Descrição'])) {
     return parseNubankCsv(data, fileName, companyCnpj, partnerCpf);
@@ -316,33 +361,45 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
           let processedContent = fileContent;
           let delimiter: string | undefined = undefined;
 
-          const normalizeHeaderLine = (line: string) => line.replace(/["\s]/g, '');
-          const lines = processedContent.split(/\r?\n/);
-
-          const nubankHeaderKeyword = 'Data,Valor,Identificador,Descrição';
-          const normalizedNubankKeyword = normalizeHeaderLine(nubankHeaderKeyword);
-          const nubankHeaderIndex = lines.findIndex(line => normalizeHeaderLine(line.trim()) === normalizedNubankKeyword);
-
-          if (nubankHeaderIndex !== -1) {
-            processedContent = lines.slice(nubankHeaderIndex).join('\n');
-            delimiter = ',';
-          } else {
-            const c6HeaderKeyword = 'Data Lançamento,Data Contábil,Título';
-            if (processedContent.includes(c6HeaderKeyword)) {
-              const c6lines = processedContent.split(/\r?\n/);
-              const headerIndex = c6lines.findIndex(line => line.trim().startsWith(c6HeaderKeyword));
-              if (headerIndex !== -1) {
-                processedContent = c6lines.slice(headerIndex).join('\n');
-              }
-            }
-
-            const mpHeaderKeyword = 'RELEASE_DATE;TRANSACTION_TYPE;REFERENCE_ID';
-            if (processedContent.includes(mpHeaderKeyword)) {
+          // Sniff for Bradesco format and clean it
+          if (processedContent.includes(';Extrato de:')) {
               delimiter = ';';
-              const mpLines = processedContent.split(/\r?\n/);
-              const headerIndex = mpLines.findIndex(line => line.trim().startsWith(mpHeaderKeyword));
-              if (headerIndex !== -1) {
-                processedContent = mpLines.slice(headerIndex).join('\n');
+              const lines = processedContent.split(/\r?\n/);
+              const headerLine = lines.find(line => line.startsWith('Data;Lançamento'));
+              
+              if (headerLine) {
+                  const dataLines = lines.filter(line => /^\d{2}\/\d{2}\/\d{4}/.test(line.trim()));
+                  processedContent = [headerLine, ...dataLines].join('\n');
+              }
+          } else {
+            const normalizeHeaderLine = (line: string) => line.replace(/["\s]/g, '');
+            const lines = processedContent.split(/\r?\n/);
+
+            const nubankHeaderKeyword = 'Data,Valor,Identificador,Descrição';
+            const normalizedNubankKeyword = normalizeHeaderLine(nubankHeaderKeyword);
+            const nubankHeaderIndex = lines.findIndex(line => normalizeHeaderLine(line.trim()) === normalizedNubankKeyword);
+
+            if (nubankHeaderIndex !== -1) {
+              processedContent = lines.slice(nubankHeaderIndex).join('\n');
+              delimiter = ',';
+            } else {
+              const c6HeaderKeyword = 'Data Lançamento,Data Contábil,Título';
+              if (processedContent.includes(c6HeaderKeyword)) {
+                const c6lines = processedContent.split(/\r?\n/);
+                const headerIndex = c6lines.findIndex(line => line.trim().startsWith(c6HeaderKeyword));
+                if (headerIndex !== -1) {
+                  processedContent = c6lines.slice(headerIndex).join('\n');
+                }
+              }
+
+              const mpHeaderKeyword = 'RELEASE_DATE;TRANSACTION_TYPE;REFERENCE_ID';
+              if (processedContent.includes(mpHeaderKeyword)) {
+                delimiter = ';';
+                const mpLines = processedContent.split(/\r?\n/);
+                const headerIndex = mpLines.findIndex(line => line.trim().startsWith(mpHeaderKeyword));
+                if (headerIndex !== -1) {
+                  processedContent = mpLines.slice(headerIndex).join('\n');
+                }
               }
             }
           }
@@ -376,7 +433,7 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
         reject(error);
       };
 
-      reader.readAsText(file, 'UTF-8');
+      reader.readAsText(file, 'latin1');
     });
   });
 
