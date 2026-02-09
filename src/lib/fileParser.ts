@@ -236,7 +236,7 @@ const parseItau = (data: any[], fileName: string, companyCnpj: string, partnerCp
 
 // Helper to check for headers case-insensitively
 const hasHeaders = (actualHeaders: string[], requiredHeaders: string[]): boolean => {
-  const lowercasedActual = actualHeaders.map(h => h.toLowerCase());
+  const lowercasedActual = actualHeaders.map(h => h.trim().toLowerCase());
   return requiredHeaders.every(rh => lowercasedActual.includes(rh.toLowerCase()));
 };
 
@@ -314,6 +314,15 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
         } else if (file.name.toLowerCase().endsWith('.csv')) {
           let processedContent = fileContent;
           let delimiter: string | undefined = undefined;
+
+          const nubankHeaderKeyword = 'Data,Valor,Identificador,Descrição';
+          if (processedContent.includes(nubankHeaderKeyword)) {
+            const lines = processedContent.split(/\r?\n/);
+            const headerIndex = lines.findIndex(line => line.trim().startsWith(nubankHeaderKeyword));
+            if (headerIndex !== -1) {
+              processedContent = lines.slice(headerIndex).join('\n');
+            }
+          }
 
           const c6HeaderKeyword = 'Data Lançamento,Data Contábil,Título';
           if (processedContent.includes(c6HeaderKeyword)) {
