@@ -311,12 +311,19 @@ const hasHeaders = (actualHeaders: string[], requiredHeaders: string[]): boolean
 
 const detectAndParse = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
   if (!data || data.length === 0) {
+    console.log(`[${fileName}] detectAndParse: Não há dados para processar.`);
     return [];
   }
   const headers = Object.keys(data[0] || {});
+  console.log(`[${fileName}] detectAndParse: Cabeçalhos recebidos do PapaParse:`, headers);
+
+  const stoneHeaders = ['Movimentação', 'Tipo', 'Valor', 'Origem Documento'];
+  const hasStoneHeaders = hasHeaders(headers, stoneHeaders);
+  console.log(`[${fileName}] detectAndParse: Verificando cabeçalhos da Stone. Resultado: ${hasStoneHeaders}`);
   
   // Detecção do Stone
-  if (hasHeaders(headers, ['Movimentação', 'Tipo', 'Valor', 'Origem Documento'])) {
+  if (hasStoneHeaders) {
+    console.log(`[${fileName}] detectAndParse: Combinou com o parser da Stone. Processando...`);
     return parseStone(data, fileName, companyCnpj, partnerCpf);
   }
 
@@ -370,8 +377,7 @@ const detectAndParse = (data: any[], fileName: string, companyCnpj: string, part
     return parsePagSeguro(data, fileName, companyCnpj, partnerCpf);
   }
 
-  console.warn(`Formato de arquivo não reconhecido para: ${fileName}`);
-  console.log('Cabeçalhos detectados:', headers);
+  console.warn(`[${fileName}] Formato de arquivo não reconhecido.`);
   return [];
 };
 
@@ -384,6 +390,7 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
         let fileContent = event.target?.result as string;
         
         if (!fileContent) {
+          console.log(`[${file.name}] Conteúdo do arquivo está vazio. Abortando.`);
           return resolve([]);
         }
 
@@ -401,14 +408,17 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
             reject(error);
           }
         } else if (file.name.toLowerCase().endsWith('.csv')) {
+          console.log(`[${file.name}] Detectado como arquivo CSV.`);
           let processedContent = fileContent;
           let delimiter: string | undefined = undefined;
 
           const firstLine = processedContent.split(/\r?\n/)[0] || '';
+          console.log(`[${file.name}] Primeira linha para detecção: "${firstLine}"`);
 
           // Explicitly detect formats by header and set delimiter
           if (firstLine.includes('Movimentação,Tipo,Valor')) {
             delimiter = ',';
+            console.log(`[${file.name}] Formato Stone detectado explicitamente. Delimitador definido como ','`);
           } else if (processedContent.includes(';Extrato de:')) {
               delimiter = ';';
               const lines = processedContent.split(/\r?\n/);
@@ -450,12 +460,14 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
               }
             }
           }
-
+          
+          console.log(`[${file.name}] Usando delimitador: ${delimiter || 'auto-detectado pelo PapaParse'}`);
           Papa.parse(processedContent, {
             header: true,
             skipEmptyLines: true,
             delimiter: delimiter,
             complete: (results) => {
+              console.log(`[${file.name}] PapaParse concluído.`, results);
               try {
                 const transactions = detectAndParse(results.data, file.name, companyCnpj, partnerCpf);
                 resolve(transactions);
