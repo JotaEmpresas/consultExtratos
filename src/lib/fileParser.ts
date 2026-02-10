@@ -224,6 +224,35 @@ const parseItau = (content: string, fileName: string): Transaction[] => {
     }));
 };
 
+const parseItau2 = (content: string, fileName: string): Transaction[] => {
+  console.log(`[Parser] Tentando Itaú 2 (com metadados) para ${fileName}`);
+  const lines = content.split(/\r?\n/);
+  const headerIndex = findHeaderLineIndex(lines, ['Data', 'Lançamento', 'Valor (R$)', 'Saldo (R$)']);
+  if (headerIndex === -1) return [];
+
+  const cleanContent = lines.slice(headerIndex).join('\n');
+  const results = Papa.parse(cleanContent, {
+    header: true,
+    skipEmptyLines: true,
+    delimiter: ';'
+  });
+  
+  return (results.data as any[])
+    .filter(row => {
+      const val = parseCurrency(getVal(row, ['Valor (R$)']));
+      const desc = (getVal(row, ['Lançamento']) || '').toString().toUpperCase();
+      return val > 0 && !desc.includes('SALDO TOTAL');
+    })
+    .map((row, index) => ({
+      id: `${fileName}-itau2-${index}`,
+      date: normalizeDate(getVal(row, ['Data'])),
+      description: getVal(row, ['Lançamento']) || '',
+      amount: parseCurrency(getVal(row, ['Valor (R$)'])),
+      sourceFile: fileName,
+      category: 'taxable',
+    }));
+};
+
 const parseCora = (content: string, fileName: string): Transaction[] => {
   const results = Papa.parse(content, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
@@ -368,6 +397,14 @@ export const parseFiles = async (files: File[], companyCnpj: string, partnerCpf:
       transactions = parseItau(content, file.name);
       if (transactions.length > 0) {
         console.log(`[Parser] Identificado como Itaú: ${transactions.length} transações`);
+        allTransactions.push(...transactions);
+        continue;
+      }
+
+      // Itaú 2 (com metadados)
+      transactions = parseItau2(content, file.name);
+      if (transactions.length > 0) {
+        console.log(`[Parser] Identificado como Itaú 2: ${transactions.length} transações`);
         allTransactions.push(...transactions);
         continue;
       }
