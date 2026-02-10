@@ -22,19 +22,34 @@ const Index = () => {
     setIsProcessing(true);
     try {
       const allParsedTransactions = await parseFiles(files, data.cnpj, data.cpf);
+      console.log(`[Filtro] Total de transações extraídas dos arquivos: ${allParsedTransactions.length}`);
       
       const selectedMonth = data.competenceDate.getMonth();
       const selectedYear = data.competenceDate.getFullYear();
+      console.log(`[Filtro] Mês selecionado: ${selectedMonth + 1}, Ano selecionado: ${selectedYear}`);
 
       const filteredTransactions = allParsedTransactions.filter(t => {
-        if (!t.date || !/^\d{2}\/\d{2}\/\d{4}$/.test(t.date)) {
+        if (!t.date) return false;
+        
+        const parts = t.date.split('/');
+        if (parts.length !== 3) {
+          console.warn(`[Filtro] Data em formato inválido: ${t.date}`);
           return false;
         }
-        const parts = t.date.split('/');
+
         const transactionMonth = parseInt(parts[1], 10) - 1;
         const transactionYear = parseInt(parts[2], 10);
-        return transactionMonth === selectedMonth && transactionYear === selectedYear;
+
+        const matches = transactionMonth === selectedMonth && transactionYear === selectedYear;
+        
+        if (!matches && allParsedTransactions.length < 10) {
+           console.log(`[Filtro] Descartando: ${t.date} (Mês ${transactionMonth + 1}, Ano ${transactionYear})`);
+        }
+
+        return matches;
       });
+
+      console.log(`[Filtro] Transações que passaram no filtro de data: ${filteredTransactions.length}`);
 
       filteredTransactions.sort((a, b) => {
         const dateA = a.date.split('/').reverse().join('');
@@ -42,13 +57,17 @@ const Index = () => {
         return dateA.localeCompare(dateB);
       });
 
+      if (filteredTransactions.length === 0 && allParsedTransactions.length > 0) {
+        showError("Nenhuma transação encontrada para o mês/ano selecionado. Verifique se o arquivo corresponde ao período.");
+      }
+
       setTransactions(filteredTransactions);
       setAnalysisData(data);
       setStep('result');
-      showSuccess("Análise concluída com sucesso!");
+      showSuccess("Análise concluída!");
     } catch (error) {
       console.error("Erro ao processar arquivos:", error);
-      showError("Ocorreu um erro ao processar os arquivos.");
+      showError("Erro ao processar os arquivos.");
     } finally {
       setIsProcessing(false);
     }
