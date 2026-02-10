@@ -404,8 +404,12 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
           let processedContent = fileContent;
           let delimiter: string | undefined = undefined;
 
-          // Sniff for Bradesco format and clean it
-          if (processedContent.includes(';Extrato de:')) {
+          const firstLine = processedContent.split(/\r?\n/)[0] || '';
+
+          // Explicitly detect formats by header and set delimiter
+          if (firstLine.includes('Movimentação,Tipo,Valor')) {
+            delimiter = ',';
+          } else if (processedContent.includes(';Extrato de:')) {
               delimiter = ';';
               const lines = processedContent.split(/\r?\n/);
               const header = lines.find(line => line.trim().startsWith('Data;Lançamento'));
