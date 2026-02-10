@@ -24,6 +24,33 @@ const parseCurrency = (value: string): number => {
   return parseFloat(cleanedValue) || 0;
 };
 
+// Parser para o formato Stone
+const parseStone = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
+  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
+  const cleanPartnerCpf = partnerCpf.replace(/\D/g, '');
+
+  return data
+    .filter(row => row['Movimentação'] === 'Crédito' && row['Valor'] && parseCurrency(row['Valor']) > 0)
+    .map((row, index) => {
+      const originDocument = row['Origem Documento']?.replace(/\D/g, '');
+      const description = `${row['Tipo'] || ''} - ${row['Origem'] || ''}`;
+      
+      const isOwnAccount = originDocument && (originDocument === cleanCompanyCnpj || originDocument === cleanPartnerCpf);
+      
+      const dateWithTime = row['Data'] || '';
+      const date = dateWithTime.split(' ')[0];
+
+      return {
+        id: `${fileName}-stone-${date}-${row['Valor']}-${index}`,
+        date: date,
+        description: description,
+        amount: parseCurrency(row['Valor']),
+        sourceFile: fileName,
+        category: isOwnAccount ? 'non-taxable' : 'taxable',
+      };
+    });
+};
+
 // Parser para o formato Bradesco
 const parseBradesco = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
   const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
@@ -288,6 +315,11 @@ const detectAndParse = (data: any[], fileName: string, companyCnpj: string, part
   }
   const headers = Object.keys(data[0] || {});
   
+  // Detecção do Stone
+  if (hasHeaders(headers, ['Movimentação', 'Tipo', 'Valor', 'Origem Documento'])) {
+    return parseStone(data, fileName, companyCnpj, partnerCpf);
+  }
+
   // Detecção do Bradesco
   if (hasHeaders(headers, ['Data', 'Lançamento', 'Crédito (R$)'])) {
     return parseBradesco(data, fileName, companyCnpj, partnerCpf);

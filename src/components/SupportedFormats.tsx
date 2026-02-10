@@ -50,6 +50,10 @@ const formats = [
     name: "Bradesco",
     fields: ["Data", "Lançamento", "Crédito (R$)"],
   },
+  {
+    name: "Stone",
+    fields: ["Movimentação", "Tipo", "Valor", "Data", "Origem", "Origem Documento"],
+  },
 ];
 
 export const SupportedFormats = () => {
