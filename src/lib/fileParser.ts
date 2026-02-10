@@ -476,7 +476,7 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
         reject(error);
       };
 
-      reader.readAsText(file, 'latin1');
+      reader.readAsText(file, 'UTF-8');
     });
   });
 
