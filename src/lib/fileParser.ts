@@ -381,8 +381,17 @@ export const parseFiles = (files: File[], companyCnpj: string, partnerCpf: strin
       const reader = new FileReader();
 
       reader.onload = async (event) => {
-        const fileContent = event.target?.result as string;
+        let fileContent = event.target?.result as string;
         
+        if (!fileContent) {
+          return resolve([]);
+        }
+
+        // Strip BOM (Byte Order Mark) if present, common in files from Windows
+        if (fileContent.charCodeAt(0) === 0xFEFF) {
+          fileContent = fileContent.substring(1);
+        }
+
         if (file.name.toLowerCase().endsWith('.ofx')) {
           try {
             const transactions = await parseOfxFile(fileContent, file.name, companyCnpj, partnerCpf);
