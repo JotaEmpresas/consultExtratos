@@ -7,69 +7,66 @@ const parseCurrency = (value: string): number => {
   if (typeof value !== 'string' || !value) {
     return 0;
   }
-  // Remove currency symbols, spaces, etc. but keep comma, dot, and minus sign
   let cleanedValue = value.replace(/[^0-9,.-]/g, '').trim();
-
   const hasComma = cleanedValue.includes(',');
   const hasDot = cleanedValue.includes('.');
 
-  // Check if it's a Brazilian format (e.g., "1.234,56") where comma is the decimal separator
   if (hasComma && (!hasDot || cleanedValue.lastIndexOf(',') > cleanedValue.lastIndexOf('.'))) {
     cleanedValue = cleanedValue.replace(/\./g, '').replace(',', '.');
   } else {
-    // It's likely US/international format (e.g., "1,234.56"). Remove thousand separators.
     cleanedValue = cleanedValue.replace(/,/g, '');
   }
-  
   return parseFloat(cleanedValue) || 0;
+};
+
+// Helper para normalizar datas para o formato DD/MM/AAAA
+const normalizeDate = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const cleanDate = dateStr.split(' ')[0]; // Remove o horário se existir
+
+  // Se já estiver no formato DD/MM/AAAA
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(cleanDate)) return cleanDate;
+
+  // Se estiver no formato AAAA-MM-DD (comum no Stone)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+    const [year, month, day] = cleanDate.split('-');
+    return `${day}/${month}/${year}`;
+  }
+
+  // Se estiver no formato DD-MM-AAAA
+  if (/^\d{2}-\d{2}-\d{4}$/.test(cleanDate)) {
+    return cleanDate.replace(/-/g, '/');
+  }
+
+  return cleanDate;
 };
 
 // Parser para o formato Stone
 const parseStone = (data: any[], fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
-  console.log(`[${fileName}] parseStone: Recebeu ${data.length} linhas para processar.`);
   const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
   const cleanPartnerCpf = partnerCpf.replace(/\D/g, '');
 
-  const filteredData = data.filter(row => {
-    const isCredit = row['Movimentação'] && row['Movimentação'].trim() === 'Crédito';
-    const hasValue = row['Valor'] && parseCurrency(row['Valor']) > 0;
-    return isCredit && hasValue;
-  });
-
-  console.log(`[${fileName}] parseStone: Encontradas ${filteredData.length} linhas de crédito após o filtro.`);
-
-  if (data.length > 0 && filteredData.length === 0) {
-    console.log(`[${fileName}] parseStone: DEBUG - A primeira linha de dados não passou no filtro. Detalhes:`, {
-      'row': data[0],
-      'row[\'Movimentação\']': data[0]['Movimentação'],
-      'isCredit': data[0]['Movimentação'] && data[0]['Movimentação'].trim() === 'Crédito',
-      'row[\'Valor\']': data[0]['Valor'],
-      'valorParseado': parseCurrency(data[0]['Valor']),
-      'hasValue': data[0]['Valor'] && parseCurrency(data[0]['Valor']) > 0,
-    });
-  }
-
-  const transactions = filteredData.map((row, index) => {
+  return data
+    .filter(row => {
+      const isCredit = row['Movimentação'] && row['Movimentação'].trim() === 'Crédito';
+      const hasValue = row['Valor'] && parseCurrency(row['Valor']) > 0;
+      return isCredit && hasValue;
+    })
+    .map((row, index) => {
       const originDocument = row['Origem Documento']?.replace(/\D/g, '');
       const description = `${row['Tipo'] || ''} - ${row['Origem'] || ''}`;
-      
       const isOwnAccount = originDocument && (originDocument === cleanCompanyCnpj || originDocument === cleanPartnerCpf);
-      
-      const dateWithTime = row['Data'] || '';
-      const date = dateWithTime.split(' ')[0];
+      const formattedDate = normalizeDate(row['Data'] || '');
 
       return {
-        id: `${fileName}-stone-${date}-${row['Valor']}-${index}`,
-        date: date,
+        id: `${fileName}-stone-${formattedDate}-${row['Valor']}-${index}`,
+        date: formattedDate,
         description: description,
         amount: parseCurrency(row['Valor']),
         sourceFile: fileName,
         category: isOwnAccount ? 'non-taxable' : 'taxable',
       };
     });
-  
-  console.log(`[${fileName}] parseStone: Mapeamento concluído. ${transactions.length} transações criadas.`);
-  return transactions;
 };
 
 // Parser para o formato Bradesco
@@ -169,15 +166,10 @@ const parseMercadoPago = (data: any[], fileName: string, companyCnpj: string, pa
     .map((row, index) => {
       const description = row['TRANSACTION_TYPE'] || '';
       const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
-      
-      let formattedDate = row['RELEASE_DATE'];
-      // Convert DD-MM-YYYY to DD/MM/YYYY
-      if (formattedDate && /^\d{2}-\d{2}-\d{4}$/.test(formattedDate)) {
-        formattedDate = formattedDate.replace(/-/g, '/');
-      }
+      const formattedDate = normalizeDate(row['RELEASE_DATE'] || '');
 
       return {
-        id: `${fileName}-mercadopago-${row['RELEASE_DATE']}-${row['TRANSACTION_NET_AMOUNT']}-${index}`,
+        id: `${fileName}-mercadopago-${formattedDate}-${row['TRANSACTION_NET_AMOUNT']}-${index}`,
         date: formattedDate,
         description: description,
         amount: parseCurrency(row['TRANSACTION_NET_AMOUNT']),
