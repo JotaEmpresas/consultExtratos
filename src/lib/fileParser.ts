@@ -315,6 +315,47 @@ const parseCora = (content: string, fileName: string): Transaction[] => {
     }));
 };
 
+const parseBB2 = (content: string, fileName: string): Transaction[] => {
+  const lines = content.split(/\r?\n/);
+  // Using the garbled names because that's what we get from the file
+  const headerIndex = findHeaderLineIndex(lines, ['Data', 'Lan�amento', 'Detalhes', 'N� documento', 'Valor', 'Tipo Lan�amento']);
+  if (headerIndex === -1) return [];
+
+  const cleanContent = lines.slice(headerIndex).join('\n');
+  const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
+  const data = results.data as any[];
+
+  return data
+    .map((row, index) => {
+      const lancamento = getVal(row, ['Lan�amento']);
+      if (!lancamento) return null;
+
+      const lowerLancamento = normalizeString(lancamento);
+      if (lowerLancamento.includes('saldo anterior') || lowerLancamento.includes('saldo do dia') || lowerLancamento.includes('s a l d o')) {
+        return null;
+      }
+
+      const valorStr = getVal(row, ['Valor']) || '0';
+      const amount = parseCurrency(valorStr);
+
+      if (amount <= 0) return null;
+
+      const dateStr = getVal(row, ['Data']);
+      const detalhes = getVal(row, ['Detalhes']);
+      const description = detalhes ? `${lancamento} - ${detalhes}`.trim() : (lancamento || '').trim();
+      
+      return {
+        id: `${fileName}-bb2-${index}`,
+        date: normalizeDate(dateStr),
+        description: description,
+        amount: amount,
+        sourceFile: fileName,
+        category: 'taxable',
+      };
+    })
+    .filter(Boolean) as Transaction[];
+};
+
 const parseBancoTradicional = (content: string, fileName: string): Transaction[] => {
   const results = Papa.parse(content, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
@@ -465,6 +506,14 @@ export const parseFiles = async (files: File[], companyCnpj: string, partnerCpf:
       transactions = parseCora(content, file.name);
       if (transactions.length > 0) {
         console.log(`[Parser] Identificado como Cora: ${transactions.length} transações`);
+        allTransactions.push(...transactions);
+        continue;
+      }
+
+      // Banco do Brasil (formato 2)
+      transactions = parseBB2(content, file.name);
+      if (transactions.length > 0) {
+        console.log(`[Parser] Identificado como Banco do Brasil (formato 2): ${transactions.length} transações`);
         allTransactions.push(...transactions);
         continue;
       }
