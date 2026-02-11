@@ -72,6 +72,11 @@ const parseStone = (content: string, fileName: string, companyCnpj: string, part
   const headerIndex = findHeaderLineIndex(lines, ['Movimentação', 'Tipo', 'Valor', 'Data']);
   if (headerIndex === -1) return [];
 
+  // Check to avoid conflict with Stone2
+  if (normalizeString(lines[headerIndex]).includes(normalizeString('Saldo antes'))) {
+    return [];
+  }
+
   const cleanContent = lines.slice(headerIndex).join('\n');
   const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
@@ -97,6 +102,45 @@ const parseStone = (content: string, fileName: string, companyCnpj: string, part
 
       return {
         id: `${fileName}-stone-${index}-${formattedDate}`,
+        date: formattedDate,
+        description: description,
+        amount: parseCurrency(getVal(row, ['Valor'])),
+        sourceFile: fileName,
+        category: isOwnAccount ? 'non-taxable' : 'taxable',
+      };
+    });
+};
+
+const parseStone2 = (content: string, fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
+  const lines = content.split(/\r?\n/);
+  const headerIndex = findHeaderLineIndex(lines, ['Movimentação', 'Tipo', 'Valor', 'Saldo antes', 'Destino Documento']);
+  if (headerIndex === -1) return [];
+
+  const cleanContent = lines.slice(headerIndex).join('\n');
+  const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
+  const data = results.data as any[];
+
+  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
+  const cleanPartnerCpf = partnerCpf.replace(/\D/g, '');
+
+  return data
+    .filter(row => {
+      const mov = normalizeString((getVal(row, ['Movimentação']) || '').toString());
+      const isCredit = mov.includes('credito');
+      const val = parseCurrency(getVal(row, ['Valor']));
+      return isCredit && val > 0;
+    })
+    .map((row, index) => {
+      const originDocument = getVal(row, ['Origem Documento'])?.toString().replace(/\D/g, '');
+      const tipo = getVal(row, ['Tipo']) || '';
+      const origem = getVal(row, ['Origem']) || '';
+      const description = `${tipo} - ${origem}`.trim();
+      const isOwnAccount = originDocument && (originDocument === cleanCompanyCnpj || originDocument === cleanPartnerCpf);
+      const dateStr = getVal(row, ['Data']) || '';
+      const formattedDate = normalizeDate(dateStr);
+
+      return {
+        id: `${fileName}-stone2-${index}-${formattedDate}`,
         date: formattedDate,
         description: description,
         amount: parseCurrency(getVal(row, ['Valor'])),
@@ -345,6 +389,14 @@ export const parseFiles = async (files: File[], companyCnpj: string, partnerCpf:
       
       // Tenta cada parser separadamente
       
+      // Stone 2
+      transactions = parseStone2(content, file.name, companyCnpj, partnerCpf);
+      if (transactions.length > 0) {
+        console.log(`[Parser] Identificado como Stone 2: ${transactions.length} transações`);
+        allTransactions.push(...transactions);
+        continue;
+      }
+
       // Stone
       transactions = parseStone(content, file.name, companyCnpj, partnerCpf);
       if (transactions.length > 0) {
