@@ -11,4 +11,6 @@ Inter
 PagSeguro
 nunbank
 bradesco
+banco do brasil 2
 stone
+estone 2
