@@ -327,8 +327,22 @@ const parseBB2 = (content: string, fileName: string): Transaction[] => {
     return [];
   }
 
-  const cleanContent = lines.slice(headerIndex).join('\n');
-  console.log(`[parseBB2] Conteúdo enviado para o PapaParse:\n${cleanContent.substring(0, 300)}...`);
+  const headerLine = lines[headerIndex];
+  const contentLines = lines.slice(headerIndex + 1);
+
+  // Pré-filtra as linhas de conteúdo para remover rodapés e linhas de resumo
+  const filteredContentLines = contentLines.filter(line => {
+    const lowerLine = normalizeString(line);
+    const isFooterLine = lowerLine.includes('saldo do dia') || lowerLine.includes('s a l d o') || lowerLine.includes('bb rende facil');
+    if (isFooterLine) {
+      console.log(`[parseBB2] Pré-filtrando linha de rodapé: ${line}`);
+      return false;
+    }
+    return true;
+  });
+
+  const cleanContent = [headerLine, ...filteredContentLines].join('\n');
+  console.log(`[parseBB2] Conteúdo limpo enviado para o PapaParse:\n${cleanContent.substring(0, 500)}...`);
   
   const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
@@ -339,14 +353,10 @@ const parseBB2 = (content: string, fileName: string): Transaction[] => {
       const lancamento = getVal(row, ['Lançamento']);
       if (!lancamento) return null;
 
-      const lowerLancamento = normalizeString(lancamento);
-      if (lowerLancamento.includes('saldo anterior') || lowerLancamento.includes('saldo do dia') || lowerLancamento.includes('s a l d o')) {
-        return null;
-      }
-
       const valorStr = getVal(row, ['Valor']) || '0';
       const amount = parseCurrency(valorStr);
 
+      // Filtra transações de débito ou com valor zero
       if (amount <= 0) return null;
 
       const dateStr = getVal(row, ['Data']);
