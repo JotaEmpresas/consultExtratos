@@ -59,10 +59,12 @@ const getVal = (row: any, keys: string[]): any => {
 // Helper para encontrar a linha do cabeçalho
 const findHeaderLineIndex = (lines: string[], keywords: string[]): number => {
   const normalizedKeywords = keywords.map(k => normalizeString(k));
-  return lines.findIndex(line => {
+  const index = lines.findIndex(line => {
     const normalizedLine = normalizeString(line);
     return normalizedKeywords.every(nk => normalizedLine.includes(nk));
   });
+  console.log(`[findHeaderLineIndex] Buscando por [${keywords.join(', ')}]. Encontrado no índice: ${index}`);
+  return index;
 };
 
 // --- PARSERS ESPECÍFICOS ---
@@ -316,15 +318,23 @@ const parseCora = (content: string, fileName: string): Transaction[] => {
 };
 
 const parseBB2 = (content: string, fileName: string): Transaction[] => {
+  console.log(`[parseBB2] Iniciando parser para ${fileName}`);
   const lines = content.split(/\r?\n/);
   const headerIndex = findHeaderLineIndex(lines, ['Data', 'Lançamento', 'Detalhes', 'Nº documento', 'Valor', 'Tipo Lançamento']);
-  if (headerIndex === -1) return [];
+  
+  if (headerIndex === -1) {
+    console.error(`[parseBB2] Cabeçalho não encontrado para o formato BB2 em ${fileName}.`);
+    return [];
+  }
 
   const cleanContent = lines.slice(headerIndex).join('\n');
+  console.log(`[parseBB2] Conteúdo enviado para o PapaParse:\n${cleanContent.substring(0, 300)}...`);
+  
   const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
+  console.log(`[parseBB2] PapaParse encontrou ${data.length} linhas.`);
 
-  return data
+  const transactions = data
     .map((row, index) => {
       const lancamento = getVal(row, ['Lançamento']);
       if (!lancamento) return null;
@@ -353,6 +363,9 @@ const parseBB2 = (content: string, fileName: string): Transaction[] => {
       };
     })
     .filter(Boolean) as Transaction[];
+  
+  console.log(`[parseBB2] Filtrou e mapeou ${transactions.length} transações válidas.`);
+  return transactions;
 };
 
 const parseBancoTradicional = (content: string, fileName: string): Transaction[] => {
@@ -411,6 +424,23 @@ const parsePagSeguro = (content: string, fileName: string): Transaction[] => {
 
 // --- FUNÇÃO PRINCIPAL ---
 
+const parsers = [
+  { name: 'Stone 2', fn: parseStone2 },
+  { name: 'Stone', fn: parseStone },
+  { name: 'C6 Bank', fn: parseC6Bank },
+  { name: 'Bradesco', fn: parseBradesco },
+  { name: 'Mercado Pago', fn: parseMercadoPago },
+  { name: 'Nubank', fn: parseNubankCsv },
+  { name: 'Inter', fn: parseInter },
+  { name: 'Itaú', fn: parseItau },
+  { name: 'Itaú 2', fn: parseItau2 },
+  { name: 'Cora', fn: parseCora },
+  { name: 'Banco do Brasil (formato 2)', fn: parseBB2 },
+  { name: 'Banco Tradicional', fn: parseBancoTradicional },
+  { name: 'PagBank', fn: parsePagBank },
+  { name: 'PagSeguro', fn: parsePagSeguro },
+];
+
 export const parseFiles = async (files: File[], companyCnpj: string, partnerCpf: string): Promise<Transaction[]> => {
   const allTransactions: Transaction[] = [];
 
@@ -420,130 +450,33 @@ export const parseFiles = async (files: File[], companyCnpj: string, partnerCpf:
       console.log(`[Parser] Processando arquivo: ${file.name} (${content.length} bytes)`);
       
       if (file.name.toLowerCase().endsWith('.ofx')) {
+        console.log(`[Parser] Arquivo identificado como OFX. Usando parser de OFX.`);
         const txs = await parseOfxFile(content, file.name, companyCnpj, partnerCpf);
         allTransactions.push(...txs);
         continue;
       }
 
-      let transactions: Transaction[] = [];
-      
-      // Tenta cada parser separadamente
-      
-      // Stone 2
-      transactions = parseStone2(content, file.name, companyCnpj, partnerCpf);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como Stone 2: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
+      let foundParser = false;
+      for (const parser of parsers) {
+        console.log(`[Parser] Tentando o parser: ${parser.name}`);
+        // @ts-ignore
+        const transactions = parser.fn(content, file.name, companyCnpj, partnerCpf);
+        if (transactions.length > 0) {
+          console.log(`[Parser] SUCESSO! Parser '${parser.name}' encontrou ${transactions.length} transações.`);
+          allTransactions.push(...transactions);
+          foundParser = true;
+          break; 
+        } else {
+          console.log(`[Parser] O parser '${parser.name}' não encontrou transações.`);
+        }
       }
 
-      // Stone
-      transactions = parseStone(content, file.name, companyCnpj, partnerCpf);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como Stone: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
+      if (!foundParser) {
+        console.warn(`[Parser] NENHUM PARSER COMPATÍVEL encontrado para o arquivo: ${file.name}`);
       }
 
-      // C6 Bank
-      transactions = parseC6Bank(content, file.name);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como C6 Bank: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      // Bradesco
-      transactions = parseBradesco(content, file.name, companyCnpj);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como Bradesco: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      // Mercado Pago
-      transactions = parseMercadoPago(content, file.name);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como Mercado Pago: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      // Nubank
-      transactions = parseNubankCsv(content, file.name);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como Nubank: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      // Inter
-      transactions = parseInter(content, file.name);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como Inter: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      // Itaú
-      transactions = parseItau(content, file.name);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como Itaú: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      // Itaú 2 (com metadados)
-      transactions = parseItau2(content, file.name);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como Itaú 2: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      // Cora
-      transactions = parseCora(content, file.name);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como Cora: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      // Banco do Brasil (formato 2)
-      transactions = parseBB2(content, file.name);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como Banco do Brasil (formato 2): ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      // Banco Tradicional
-      transactions = parseBancoTradicional(content, file.name);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como Banco Tradicional: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      // PagBank
-      transactions = parsePagBank(content, file.name);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como PagBank: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      // PagSeguro
-      transactions = parsePagSeguro(content, file.name);
-      if (transactions.length > 0) {
-        console.log(`[Parser] Identificado como PagSeguro: ${transactions.length} transações`);
-        allTransactions.push(...transactions);
-        continue;
-      }
-
-      console.warn(`[Parser] Nenhum parser compatível encontrado para o arquivo: ${file.name}`);
     } catch (error) {
-      console.error(`[Parser] Erro ao processar arquivo ${file.name}:`, error);
+      console.error(`[Parser] ERRO CRÍTICO ao processar arquivo ${file.name}:`, error);
     }
   }
 
@@ -555,23 +488,27 @@ const readFileAsText = (file: File): Promise<string> => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const buffer = e.target?.result as ArrayBuffer;
+      console.log(`[readFileAsText] Arquivo ${file.name} lido, ${buffer.byteLength} bytes.`);
       
       // Tenta UTF-8 primeiro
       const utf8Decoder = new TextDecoder('utf-8');
       let content = utf8Decoder.decode(buffer);
+      console.log(`[readFileAsText] Tentativa de decodificação UTF-8 (primeiras 300 chars): ${content.substring(0, 300)}`);
       
       // Heurística para detectar encoding incorreto, especialmente para arquivos do BB
       const hasGarbledChars = content.includes('Lan�amento') || content.includes('N� documento');
+      console.log(`[readFileAsText] Verificando caracteres problemáticos (�): ${hasGarbledChars}`);
 
-      // Se contiver o caractere de substituição (�), os caracteres problemáticos do BB, ou se não encontrarmos palavras-chave básicas, tentamos windows-1252
-      if (hasGarbledChars || content.includes('\uFFFD') || (!content.includes('Data') && !content.includes('Valor') && !content.includes('Movimenta'))) {
-        console.log(`[Parser] Detectado possível problema de encoding em ${file.name}, forçando windows-1252`);
+      if (hasGarbledChars || content.includes('\uFFFD')) {
+        console.log(`[readFileAsText] Detectado problema de encoding. Tentando com windows-1252.`);
         const isoDecoder = new TextDecoder('windows-1252');
         content = isoDecoder.decode(buffer);
+        console.log(`[readFileAsText] Resultado com windows-1252 (primeiras 300 chars): ${content.substring(0, 300)}`);
       }
       
       // Remove BOM se existir
       if (content.charCodeAt(0) === 0xFEFF) {
+        console.log(`[readFileAsText] Byte Order Mark (BOM) encontrado e removido.`);
         content = content.substring(1);
       }
       
