@@ -12,5 +12,6 @@ PagSeguro
 nunbank
 bradesco
 banco do brasil 2
-stone
-estone 2
+stonestone
+stone 2
+infinit pay
