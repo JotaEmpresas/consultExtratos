@@ -320,30 +320,14 @@ const parseCora = (content: string, fileName: string): Transaction[] => {
 const parseBB2 = (content: string, fileName: string): Transaction[] => {
   console.log(`[parseBB2] Iniciando parser para ${fileName}`);
   const lines = content.split(/\r?\n/);
-  const headerIndex = findHeaderLineIndex(lines, ['Data', 'Lançamento', 'Detalhes', 'Nº documento', 'Valor', 'Tipo Lançamento']);
+  const headerIndex = findHeaderLineIndex(lines, ['Data', 'Lançamento', 'Valor']);
   
   if (headerIndex === -1) {
-    console.error(`[parseBB2] Cabeçalho não encontrado para o formato BB2 em ${fileName}.`);
+    console.error(`[parseBB2] Cabeçalho não encontrado em ${fileName}.`);
     return [];
   }
 
-  const headerLine = lines[headerIndex];
-  const contentLines = lines.slice(headerIndex + 1);
-
-  // Pré-filtra as linhas de conteúdo para remover rodapés e linhas de resumo
-  const filteredContentLines = contentLines.filter(line => {
-    const lowerLine = normalizeString(line);
-    const isFooterLine = lowerLine.includes('saldo do dia') || lowerLine.includes('s a l d o') || lowerLine.includes('bb rende facil');
-    if (isFooterLine) {
-      console.log(`[parseBB2] Pré-filtrando linha de rodapé: ${line}`);
-      return false;
-    }
-    return true;
-  });
-
-  const cleanContent = [headerLine, ...filteredContentLines].join('\n');
-  console.log(`[parseBB2] Conteúdo limpo enviado para o PapaParse:\n${cleanContent.substring(0, 500)}...`);
-  
+  const cleanContent = lines.slice(headerIndex).join('\n');
   const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
   console.log(`[parseBB2] PapaParse encontrou ${data.length} linhas.`);
@@ -351,17 +335,27 @@ const parseBB2 = (content: string, fileName: string): Transaction[] => {
   const transactions = data
     .map((row, index) => {
       const lancamento = getVal(row, ['Lançamento']);
-      if (!lancamento) return null;
+      const valorStr = getVal(row, ['Valor']);
 
-      const valorStr = getVal(row, ['Valor']) || '0';
+      if (!lancamento || !valorStr) {
+        return null;
+      }
+
+      const lowerLancamento = normalizeString(lancamento);
+      const keywordsToFilter = ['saldo do dia', 's a l d o', 'bb rende facil', 'saldo anterior'];
+      if (keywordsToFilter.some(keyword => lowerLancamento.includes(keyword))) {
+        console.log(`[parseBB2] Filtrando linha por palavra-chave: ${lancamento}`);
+        return null;
+      }
+
       const amount = parseCurrency(valorStr);
-
-      // Filtra transações de débito ou com valor zero
-      if (amount <= 0) return null;
+      if (amount <= 0) {
+        return null;
+      }
 
       const dateStr = getVal(row, ['Data']);
       const detalhes = getVal(row, ['Detalhes']);
-      const description = detalhes ? `${lancamento} - ${detalhes}`.trim() : (lancamento || '').trim();
+      const description = detalhes ? `${lancamento} - ${detalhes}`.trim() : lancamento.trim();
       
       return {
         id: `${fileName}-bb2-${index}`,
