@@ -560,9 +560,12 @@ const readFileAsText = (file: File): Promise<string> => {
       const utf8Decoder = new TextDecoder('utf-8');
       let content = utf8Decoder.decode(buffer);
       
-      // Se contiver o caractere de substituição () ou se não encontrarmos palavras-chave básicas, tentamos ISO-8859-1
-      if (content.includes('\uFFFD') || (!content.includes('Data') && !content.includes('Valor') && !content.includes('Movimenta'))) {
-        console.log(`[Parser] Detectado possível problema de encoding em ${file.name}, tentando windows-1252`);
+      // Heurística para detectar encoding incorreto, especialmente para arquivos do BB
+      const hasGarbledChars = content.includes('Lan�amento') || content.includes('N� documento');
+
+      // Se contiver o caractere de substituição (�), os caracteres problemáticos do BB, ou se não encontrarmos palavras-chave básicas, tentamos windows-1252
+      if (hasGarbledChars || content.includes('\uFFFD') || (!content.includes('Data') && !content.includes('Valor') && !content.includes('Movimenta'))) {
+        console.log(`[Parser] Detectado possível problema de encoding em ${file.name}, forçando windows-1252`);
         const isoDecoder = new TextDecoder('windows-1252');
         content = isoDecoder.decode(buffer);
       }
