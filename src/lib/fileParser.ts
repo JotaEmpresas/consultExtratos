@@ -318,7 +318,7 @@ const parseCora = (content: string, fileName: string): Transaction[] => {
 const parseBB2 = (content: string, fileName: string): Transaction[] => {
   const lines = content.split(/\r?\n/);
   // Using the garbled names because that's what we get from the file
-  const headerIndex = findHeaderLineIndex(lines, ['Data', 'Lan�amento', 'Detalhes', 'N� documento', 'Valor', 'Tipo Lan�amento']);
+  const headerIndex = findHeaderLineIndex(lines, ['Data', 'Lançamento', 'Detalhes', 'Nº documento', 'Valor', 'Tipo Lançamento']);
   if (headerIndex === -1) return [];
 
   const cleanContent = lines.slice(headerIndex).join('\n');
@@ -327,7 +327,7 @@ const parseBB2 = (content: string, fileName: string): Transaction[] => {
 
   return data
     .map((row, index) => {
-      const lancamento = getVal(row, ['Lan�amento']);
+      const lancamento = getVal(row, ['Lançamento']);
       if (!lancamento) return null;
 
       const lowerLancamento = normalizeString(lancamento);
