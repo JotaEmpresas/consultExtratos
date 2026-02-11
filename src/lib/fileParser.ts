@@ -74,24 +74,39 @@ const findHeaderLineIndex = (lines: string[], keywords: string[]): number => {
 // --- PARSERS ESPECÍFICOS ---
 
 const parseInfinitPay = (content: string, fileName: string): Transaction[] => {
-  const results = Papa.parse(content, { header: true, skipEmptyLines: true });
-  const data = results.data as any[];
+  console.log(`[parseInfinitPay] Iniciando parser para ${fileName}`);
+  const lines = content.split(/\r?\n/);
+  const headerIndex = findHeaderLineIndex(lines, ['Date', 'Transaction Type', 'Amount']);
 
-  if (!getVal(data[0], ['Transaction Type']) || !getVal(data[0], ['Amount'])) {
+  if (headerIndex === -1) {
+    console.error(`[parseInfinitPay] Cabeçalho não encontrado em ${fileName}.`);
     return [];
   }
 
-  return data
+  const cleanContent = lines.slice(headerIndex).join('\n');
+  console.log(`[parseInfinitPay] Conteúdo limpo enviado para o PapaParse:\n${cleanContent.substring(0, 500)}...`);
+
+  const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
+  const data = results.data as any[];
+  console.log(`[parseInfinitPay] PapaParse encontrou ${data.length} linhas.`);
+
+  const transactions = data
     .filter(row => {
       const amountStr = getVal(row, ['Amount']) || '';
-      return amountStr.includes('+') && parseCurrency(amountStr) > 0;
+      const isCredit = amountStr.includes('+');
+      const amount = parseCurrency(amountStr);
+      const isValid = isCredit && amount > 0;
+      if (!isValid && amountStr) {
+        console.log(`[parseInfinitPay] Filtrando linha: Amount='${amountStr}'`);
+      }
+      return isValid;
     })
     .map((row, index) => {
       const name = getVal(row, ['Name']) || '';
       const detail = getVal(row, ['Detail']) || '';
       const description = [name, detail].filter(Boolean).join(' - ');
 
-      return {
+      const transaction = {
         id: `${fileName}-infinitpay-${index}`,
         date: normalizeDate(getVal(row, ['Date'])),
         description: description,
@@ -99,7 +114,12 @@ const parseInfinitPay = (content: string, fileName: string): Transaction[] => {
         sourceFile: fileName,
         category: 'taxable',
       };
+      console.log(`[parseInfinitPay] Mapeada transação: ${JSON.stringify(transaction)}`);
+      return transaction;
     });
+  
+  console.log(`[parseInfinitPay] Filtrou e mapeou ${transactions.length} transações válidas.`);
+  return transactions;
 };
 
 const parseStone = (content: string, fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
