@@ -54,6 +54,10 @@ const formats = [
     name: "Stone",
     fields: ["Movimentação", "Tipo", "Valor", "Data", "Origem", "Origem Documento"],
   },
+  {
+    name: "InfinitPay",
+    fields: ["Date", "Transaction Type", "Name", "Detail", "Amount"],
+  },
 ];
 
 export const SupportedFormats = () => {

@@ -11,12 +11,16 @@ const normalizeString = (s: string): string => {
 // Helper para converter moeda para número
 const parseCurrency = (value: string): number => {
   if (typeof value !== 'string' || !value) return 0;
-  let cleanedValue = value.replace(/[^0-9,.-]/g, '').trim();
+  // Remove R$, espaços e mantém o sinal, números, vírgulas e pontos.
+  let cleanedValue = value.replace(/R\$\s*/g, '').trim();
+  
+  // Trata o formato brasileiro (1.000,00)
   const hasComma = cleanedValue.includes(',');
   const hasDot = cleanedValue.includes('.');
   if (hasComma && (!hasDot || cleanedValue.lastIndexOf(',') > cleanedValue.lastIndexOf('.'))) {
     cleanedValue = cleanedValue.replace(/\./g, '').replace(',', '.');
   } else {
+    // Trata o formato americano (1,000.00)
     cleanedValue = cleanedValue.replace(/,/g, '');
   }
   return parseFloat(cleanedValue) || 0;
@@ -68,6 +72,35 @@ const findHeaderLineIndex = (lines: string[], keywords: string[]): number => {
 };
 
 // --- PARSERS ESPECÍFICOS ---
+
+const parseInfinitPay = (content: string, fileName: string): Transaction[] => {
+  const results = Papa.parse(content, { header: true, skipEmptyLines: true });
+  const data = results.data as any[];
+
+  if (!getVal(data[0], ['Transaction Type']) || !getVal(data[0], ['Amount'])) {
+    return [];
+  }
+
+  return data
+    .filter(row => {
+      const amountStr = getVal(row, ['Amount']) || '';
+      return amountStr.includes('+') && parseCurrency(amountStr) > 0;
+    })
+    .map((row, index) => {
+      const name = getVal(row, ['Name']) || '';
+      const detail = getVal(row, ['Detail']) || '';
+      const description = [name, detail].filter(Boolean).join(' - ');
+
+      return {
+        id: `${fileName}-infinitpay-${index}`,
+        date: normalizeDate(getVal(row, ['Date'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['Amount'])),
+        sourceFile: fileName,
+        category: 'taxable',
+      };
+    });
+};
 
 const parseStone = (content: string, fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
   const lines = content.split(/\r?\n/);
@@ -429,6 +462,7 @@ const parsePagSeguro = (content: string, fileName: string): Transaction[] => {
 // --- FUNÇÃO PRINCIPAL ---
 
 const parsers = [
+  { name: 'InfinitPay', fn: parseInfinitPay },
   { name: 'Stone 2', fn: parseStone2 },
   { name: 'Stone', fn: parseStone },
   { name: 'C6 Bank', fn: parseC6Bank },
