@@ -16,9 +16,7 @@ const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiAnalysisText, setAiAnalysisText] = useState<string>("");
 
-  // Recupera URL do webhook (padrão production ou test se o usuário tiver alguma flag, aqui simplificamos para Prod como principal)
   const getWebhookUrl = () => {
-     // Prioriza a URL salva no localStorage, senão usa a padrão
      return localStorage.getItem('prodWebhookUrl') || 'https://jota-empresas-n8n.ubjifz.easypanel.host/webhook/bd95e5ce-4ebf-48c9-b823-ad8b57429c7e';
   };
 
@@ -30,18 +28,24 @@ const Index = () => {
       return;
     }
 
+    // Validação de tamanho (limite seguro de ~4MB para evitar timeout/payload error em servidores padrão)
+    const MAX_SIZE_MB = 4;
+    const totalSize = files.reduce((acc, file) => acc + file.size, 0);
+    if (totalSize > MAX_SIZE_MB * 1024 * 1024) {
+      showError(`Os arquivos somam ${(totalSize / 1024 / 1024).toFixed(2)}MB. O limite recomendado é ${MAX_SIZE_MB}MB para garantir o envio.`);
+      return;
+    }
+
     setIsProcessing(true);
     const toastId = showLoading('Lendo arquivos e enviando para a IA processar...');
 
     try {
-      // 1. Ler o conteúdo bruto dos arquivos
       const filesContent = await readFilesForWebhook(files);
       
       if (filesContent.length === 0) {
         throw new Error("Falha ao ler o conteúdo dos arquivos.");
       }
 
-      // 2. Montar o payload
       const payload = {
         analysisData: {
           ...data,
@@ -50,50 +54,61 @@ const Index = () => {
         files: filesContent
       };
 
-      // 3. Enviar para o Webhook
       console.log("Enviando payload para:", webhookUrl);
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro no servidor da IA: ${response.status} ${response.statusText}`);
-      }
-
-      // 4. Processar Resposta
-      const result: AiProcessingResponse = await response.json();
-      console.log("Resposta da IA recebida:", result);
-
-      // Validação básica da resposta
-      if (!result.transacoesTributaveis && !result.transacoesNaoTributaveis) {
-         throw new Error("A resposta da IA não contém as listas de transações esperadas.");
-      }
-
-      // Adicionar categoria e garantir formato nas transações retornadas
-      const taxable = (result.transacoesTributaveis || []).map((t, i) => ({
-        ...t,
-        id: t.id || `ai-tax-${i}`,
-        category: 'taxable' as const,
-        // Garantir que amount seja número
-        amount: typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount
-      }));
-
-      const nonTaxable = (result.transacoesNaoTributaveis || []).map((t, i) => ({
-        ...t,
-        id: t.id || `ai-nontax-${i}`,
-        category: 'non-taxable' as const,
-        amount: typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount
-      }));
-
-      setTransactions([...taxable, ...nonTaxable]);
-      setAnalysisData(data);
-      setAiAnalysisText(result.analise || "Análise processada com sucesso.");
       
-      setStep('result');
-      dismissToast(toastId);
-      showSuccess("Processamento da IA concluído!");
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            // 'Accept': 'application/json' 
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          if (response.status === 413) {
+            throw new Error("Os arquivos são muito grandes para o servidor aceitar (Erro 413).");
+          }
+          throw new Error(`Erro no servidor da IA: ${response.status} ${response.statusText}`);
+        }
+
+        const result: AiProcessingResponse = await response.json();
+        console.log("Resposta da IA recebida:", result);
+
+        if (!result.transacoesTributaveis && !result.transacoesNaoTributaveis) {
+          throw new Error("A IA respondeu, mas não retornou as listas de transações esperadas. Verifique o formato de saída no n8n.");
+        }
+
+        const taxable = (result.transacoesTributaveis || []).map((t, i) => ({
+          ...t,
+          id: t.id || `ai-tax-${i}`,
+          category: 'taxable' as const,
+          amount: typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount
+        }));
+
+        const nonTaxable = (result.transacoesNaoTributaveis || []).map((t, i) => ({
+          ...t,
+          id: t.id || `ai-nontax-${i}`,
+          category: 'non-taxable' as const,
+          amount: typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount
+        }));
+
+        setTransactions([...taxable, ...nonTaxable]);
+        setAnalysisData(data);
+        setAiAnalysisText(result.analise || "Análise processada com sucesso.");
+        
+        setStep('result');
+        dismissToast(toastId);
+        showSuccess("Processamento da IA concluído!");
+
+      } catch (fetchError) {
+        // Tratamento específico para erro de rede/CORS
+        if (fetchError instanceof TypeError && fetchError.message.includes("Failed to fetch")) {
+          throw new Error("Erro de conexão (CORS). No seu n8n (Webhook), vá em Options > Allowed Origins (CORS) e coloque '*'.");
+        }
+        throw fetchError;
+      }
 
     } catch (error) {
       console.error("Erro no processo:", error);
@@ -121,7 +136,6 @@ const Index = () => {
     setAiAnalysisText("");
   };
 
-  // Função stub para manter compatibilidade com interface, mas agora o processamento principal JÁ É a IA
   const handleReanalyzeAi = async (type: 'prod' | 'test') => {
      showSuccess("A análise já foi feita pela IA no processamento inicial.");
   };
@@ -139,8 +153,8 @@ const Index = () => {
         {step === 'input' && (
           <div className="space-y-6">
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200">
-              <p className="font-semibold mb-1">Novo modo de processamento ativo</p>
-              Os extratos serão enviados diretamente para a IA, que identificará automaticamente o formato e classificará as transações. Certifique-se de que a URL do Webhook em <strong>Configurações</strong> (ícone da engrenagem) está correta.
+              <p className="font-semibold mb-1">Processamento via IA Ativo</p>
+              Os extratos serão enviados para o seu n8n. Certifique-se de que o Webhook permite conexões externas (CORS configurado com <code>*</code>).
             </div>
             <AnalysisForm onSubmit={handleProcessAnalysis} isProcessing={isProcessing} />
           </div>
@@ -148,7 +162,6 @@ const Index = () => {
         
         {step === 'result' && analysisData && (
           <div className="space-y-6">
-             {/* Exibindo o parecer da IA que veio no JSON */}
             {aiAnalysisText && (
                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-indigo-100 dark:border-indigo-900 no-print">
                   <h3 className="text-lg font-semibold mb-2 text-indigo-600 dark:text-indigo-400">Parecer da IA</h3>
@@ -163,7 +176,7 @@ const Index = () => {
               analysisData={analysisData}
               onBack={handleNewAnalysis}
               onToggleCategory={handleToggleTransactionCategory}
-              onAiAnalysis={handleReanalyzeAi} // Desabilitado visualmente ou informativo
+              onAiAnalysis={handleReanalyzeAi}
               isAiProcessing={false}
             />
           </div>
