@@ -21,31 +21,39 @@ export const parseBradesco2 = (
       complete: (results) => {
         const transactions: Transaction[] = [];
         let headerFound = false;
-        let dateIndex = 0;
-        let descriptionIndex = 1;
-        let creditIndex = 3;
+        let dateIndex = -1;
+        let descriptionIndex = -1;
+        let creditIndex = -1;
         let valueIndex = -1;
 
-        const headerRowIndex = results.data.findIndex((row: any) => 
-            Array.isArray(row) && row.some((cell: string) => cell?.toLowerCase().includes('data')) && row.some((cell: string) => cell?.toLowerCase().includes('lançamento'))
-        );
+        const headerRowIndex = results.data.findIndex((row: any) => {
+            if (!Array.isArray(row)) return false;
+            const lowerCaseRow = row.map(c => String(c || '').toLowerCase());
+            // Procura por 'data' e 'lan' para ser mais robusto a erros de encoding ('lançamento' -> 'lan�amento')
+            return lowerCaseRow.some(c => c.includes('data')) && lowerCaseRow.some(c => c.includes('lan'));
+        });
 
         if (headerRowIndex !== -1) {
             const header: string[] = results.data[headerRowIndex].map((h: any) => String(h || '').toLowerCase());
             headerFound = true;
             dateIndex = header.findIndex(h => h.includes('data'));
-            descriptionIndex = header.findIndex(h => h.includes('lançamento') || h.includes('histórico'));
+            descriptionIndex = header.findIndex(h => h.includes('lan')); // 'lan' para 'lançamento'
             creditIndex = header.findIndex(h => h.includes('crédito'));
             
             if (creditIndex === -1) {
                 valueIndex = header.findIndex(h => h.includes('valor'));
             }
+        } else {
+            // Fallback para o formato sem cabeçalho explícito, mas com estrutura fixa
+            dateIndex = 0;
+            descriptionIndex = 1;
+            creditIndex = 3;
         }
 
         const dataToParse = headerFound ? results.data.slice(headerRowIndex + 1) : results.data;
 
         dataToParse.forEach((row: any, index: number) => {
-          if (!Array.isArray(row)) return;
+          if (!Array.isArray(row) || dateIndex === -1 || descriptionIndex === -1) return;
 
           const dateStr = row[dateIndex]?.trim();
           if (!dateStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
@@ -81,7 +89,7 @@ export const parseBradesco2 = (
               cleanedNameList.some(name => name && normalizedDesc.includes(name));
 
             const transaction: Transaction = {
-              id: `bradesco-${Date.now()}-${index}`,
+              id: `bradesco2-${Date.now()}-${index}`,
               date: dateStr,
               description: description,
               amount: amount,
@@ -92,7 +100,7 @@ export const parseBradesco2 = (
           }
         });
         
-        if (transactions.length === 0 && results.data.length > 0) {
+        if (transactions.length === 0 && results.data.length > 5) { // Aumentado o threshold para evitar falsos positivos
             return reject(new Error('Nenhuma transação de crédito foi encontrada no arquivo do Bradesco (Formato 2). Verifique se o arquivo é um extrato válido.'));
         }
 
