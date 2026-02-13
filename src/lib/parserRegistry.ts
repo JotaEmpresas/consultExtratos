@@ -11,12 +11,14 @@ import { parseBradesco } from './parsers/bradesco';
 import { parseMercadoPago } from './parsers/mercadoPago';
 import { parseC6Bank } from './parsers/c6bank';
 import { parsePagBank } from './parsers/pagbank';
+import { parseCora } from './parsers/cora';
 
 export const bankOptions = [
   { value: 'banco-da-amazonia', label: 'Banco da Amazônia' },
   { value: 'banco-do-brasil', label: 'Banco do Brasil' },
   { value: 'bradesco', label: 'Bradesco' },
   { value: 'c6-bank', label: 'C6 Bank' },
+  { value: 'cora', label: 'Cora' },
   { value: 'infinitpay', label: 'InfinitPay' },
   { value: 'itau', label: 'Itaú' },
   { value: 'mercado-pago', label: 'Mercado Pago' },
@@ -33,6 +35,7 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'banco-do-brasil': parseBancoDoBrasil,
   'bradesco': parseBradesco,
   'c6-bank': parseC6Bank,
+  'cora': parseCora,
   'infinitpay': parseInfinitPay,
   'itau': parseItau,
   'mercado-pago': parseMercadoPago,
