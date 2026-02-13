@@ -15,38 +15,32 @@ export const parseBradesco = (
   nameList: string[]
 ): Promise<Transaction[]> => {
   return new Promise((resolve, reject) => {
-    const lines = fileContent.split('\n');
-    
-    // Filtra apenas as linhas que são de fato transações (começam com uma data no formato DD/MM/YYYY)
-    const transactionLines = lines.filter(line => /^\d{2}\/\d{2}\/\d{4};/.test(line.trim()));
-
-    if (transactionLines.length === 0) {
-      return reject(new Error('Nenhuma transação válida foi encontrada no arquivo do Bradesco. Verifique o formato.'));
-    }
-
-    // Remonta um CSV limpo apenas com as transações e um cabeçalho padronizado
-    const header = "Data;Lancamento;Dcto;Credito;Debito;Saldo\n";
-    const csvContent = header + transactionLines.join('\n');
-
-    Papa.parse(csvContent, {
-      header: true,
+    Papa.parse(fileContent, {
       delimiter: ';',
       skipEmptyLines: true,
       complete: (results) => {
         const transactions: Transaction[] = [];
         
-        results.data.forEach((row: any, index: number) => {
-          const amount = parseCurrency(row['Credito']);
+        results.data.forEach((row: string[], index: number) => {
+          // O CSV do Bradesco pode ter linhas de cabeçalho/rodapé. Uma linha de transação válida começa com uma data.
+          const dateStr = row[0]?.trim();
+          if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+            return; // Ignora a linha se a primeira coluna não for uma data no formato DD/MM/YYYY
+          }
 
-          // Processar apenas transações de crédito (valores positivos)
+          // Índices das colunas: 0:Data, 1:Lançamento, 3:Crédito
+          const creditStr = row[3];
+          const amount = parseCurrency(creditStr);
+
+          // Processa apenas transações de crédito (valores positivos)
           if (amount > 0) {
-            const description = row['Lancamento']?.trim() || 'Descrição não informada';
+            const description = row[1]?.trim() || 'Descrição não informada';
 
             const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
 
             const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-            const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
+            const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '').filter(Boolean));
             const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
 
             const isOwnAccount = 
@@ -56,18 +50,20 @@ export const parseBradesco = (
 
             const transaction: Transaction = {
               id: `bradesco-${Date.now()}-${index}`,
-              date: row['Data']?.trim() || '',
+              date: dateStr,
               description: description,
               amount: amount,
               category: isOwnAccount ? 'non-taxable' : 'taxable',
             };
             
-            if (transaction.date) {
-              transactions.push(transaction);
-            }
+            transactions.push(transaction);
           }
         });
         
+        if (transactions.length === 0 && results.data.length > 0) {
+            return reject(new Error('Nenhuma transação de crédito foi encontrada no arquivo do Bradesco. Verifique se o arquivo é um extrato válido e se as colunas estão na ordem esperada (Data, Lançamento, ..., Crédito).'));
+        }
+
         resolve(transactions);
       },
       error: (error: Error) => {
