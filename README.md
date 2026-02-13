@@ -15,4 +15,5 @@ banco do brasil 2
 Estone- ok
 stone 2
 infinit pay
-Santander - okBanco da Amazonia - ok
+Santander - ok
+Banco da Amazonia - ok
