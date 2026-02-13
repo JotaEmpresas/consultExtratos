@@ -19,16 +19,18 @@ const Index = () => {
   const [aiAnalysisText, setAiAnalysisText] = useState<string>("");
   const [corsError, setCorsError] = useState(false);
 
-  const getWebhookUrl = () => {
-     return localStorage.getItem('prodWebhookUrl') || 'https://jota-empresas-n8n.ubjifz.easypanel.host/webhook/bd95e5ce-4ebf-48c9-b823-ad8b57429c7e';
+  const getWebhookUrl = (type: 'prod' | 'test') => {
+    const prodUrl = localStorage.getItem('prodWebhookUrl') || 'https://jota-empresas-n8n.ubjifz.easypanel.host/webhook/bd95e5ce-4ebf-48c9-b823-ad8b57429c7e';
+    const testUrl = localStorage.getItem('testWebhookUrl') || 'https://jota-empresas-n8n.ubjifz.easypanel.host/webhook-test/bd95e5ce-4ebf-48c9-b823-ad8b57429c7e';
+    return type === 'test' ? testUrl : prodUrl;
   };
 
-  const handleProcessAnalysis = async (data: AnalysisData, files: File[]) => {
+  const handleProcessAnalysis = async (data: AnalysisData, files: File[], environment: 'prod' | 'test') => {
     setCorsError(false);
-    const webhookUrl = getWebhookUrl();
+    const webhookUrl = getWebhookUrl(environment);
     
     if (!webhookUrl) {
-      showError("URL do Webhook não configurada. Verifique as configurações.");
+      showError(`URL do Webhook de ${environment === 'prod' ? 'Produção' : 'Teste'} não configurada. Verifique as configurações.`);
       return;
     }
 
@@ -41,7 +43,7 @@ const Index = () => {
     }
 
     setIsProcessing(true);
-    const toastId = showLoading('Lendo arquivos e enviando para a IA processar...');
+    const toastId = showLoading(`Enviando para o ambiente de ${environment}...`);
 
     try {
       const filesContent = await readFilesForWebhook(files);
@@ -58,14 +60,13 @@ const Index = () => {
         files: filesContent
       };
 
-      console.log("Enviando payload para:", webhookUrl);
+      console.log(`Enviando payload para (${environment}):`, webhookUrl);
       
       try {
         const response = await fetch(webhookUrl, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            // 'Accept': 'application/json' 
           },
           body: JSON.stringify(payload),
         });
@@ -107,7 +108,6 @@ const Index = () => {
         showSuccess("Processamento da IA concluído!");
 
       } catch (fetchError) {
-        // Tratamento específico para erro de rede/CORS
         if (fetchError instanceof TypeError && fetchError.message.includes("Failed to fetch")) {
           setCorsError(true);
           throw new Error("Erro de conexão (CORS). O navegador bloqueou a solicitação. Verifique o alerta na tela.");

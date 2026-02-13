@@ -13,9 +13,10 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AnalysisData } from '@/types';
 import { SupportedFormats } from './SupportedFormats';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 
 interface AnalysisFormProps {
-  onSubmit: (data: AnalysisData, files: File[]) => void;
+  onSubmit: (data: AnalysisData, files: File[], environment: 'prod' | 'test') => void;
   isProcessing: boolean;
 }
 
@@ -26,6 +27,7 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
   const [totalInvoices, setTotalInvoices] = useState('');
   const [competenceDate, setCompetenceDate] = useState<Date | undefined>(new Date());
   const [files, setFiles] = useState<File[]>([]);
+  const [environment, setEnvironment] = useState<'prod' | 'test'>('prod');
 
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '');
@@ -61,7 +63,7 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
       partnerNames,
       totalInvoices: totalInvoices || '0',
       competenceDate,
-    }, files);
+    }, files, environment);
   };
 
   return (
@@ -118,6 +120,23 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
           <div className="space-y-2">
             <Label>Extratos Bancários (.csv)</Label>
             <FileUpload files={files} setFiles={setFiles} />
+          </div>
+
+          <div className="space-y-3 rounded-lg border p-4">
+            <Label className="font-semibold">Ambiente de Envio</Label>
+            <RadioGroup defaultValue="prod" value={environment} onValueChange={(value: 'prod' | 'test') => setEnvironment(value)} className="flex items-center space-x-4 pt-2">
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="prod" id="r-prod" />
+                <Label htmlFor="r-prod" className="cursor-pointer">Produção</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="test" id="r-test" />
+                <Label htmlFor="r-test" className="cursor-pointer">Teste</Label>
+              </div>
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground">
+              Use <strong>Produção</strong> se o workflow estiver ativo. Use <strong>Teste</strong> se estiver usando a função "Listen for test event" no n8n.
+            </p>
           </div>
 
           <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3" disabled={!isFormValid}>
