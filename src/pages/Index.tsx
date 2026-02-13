@@ -2,7 +2,8 @@ import { useState } from "react";
 import { AnalysisForm } from "@/components/AnalysisForm";
 import { AnalysisResult } from "@/components/AnalysisResult";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { readFilesForWebhook } from "@/lib/fileParser";
+import { parseFileContent } from "@/lib/fileParser";
+import { readFilesForWebhook } from "@/lib/fileReader";
 import { showError, showSuccess, showLoading, dismissToast } from "@/utils/toast";
 import { Transaction, AnalysisData, AiProcessingResponse } from "@/types";
 import { SettingsSheet } from "@/components/SettingsSheet";
@@ -28,13 +29,12 @@ const Index = () => {
   const handleProcessAnalysis = async (data: AnalysisData, files: File[], environment: 'prod' | 'test') => {
     setCorsError(false);
     const webhookUrl = getWebhookUrl(environment);
-    
+
     if (!webhookUrl) {
       showError(`URL do Webhook de ${environment === 'prod' ? 'Produção' : 'Teste'} não configurada. Verifique as configurações.`);
       return;
     }
 
-    // Validação de tamanho (limite seguro de ~4MB para evitar timeout/payload error em servidores padrão)
     const MAX_SIZE_MB = 4;
     const totalSize = files.reduce((acc, file) => acc + file.size, 0);
     if (totalSize > MAX_SIZE_MB * 1024 * 1024) {
@@ -43,51 +43,57 @@ const Index = () => {
     }
 
     setIsProcessing(true);
-    const toastId = showLoading(`Enviando para o ambiente de ${environment}...`);
+    let toastId = showLoading("Processando arquivos...");
 
     try {
       const filesContent = await readFilesForWebhook(files);
-      
-      if (filesContent.length === 0) {
-        throw new Error("Falha ao ler o conteúdo dos arquivos.");
+      if (filesContent.length === 0) throw new Error("Nenhum arquivo pôde ser lido.");
+
+      const allTransactions = filesContent.flatMap(file => {
+        try {
+          return parseFileContent(file.content);
+        } catch (error) {
+          showError(`Erro ao processar o arquivo ${file.fileName}: ${error instanceof Error ? error.message : "Erro desconhecido"}`);
+          return [];
+        }
+      });
+
+      if (allTransactions.length === 0) {
+        throw new Error("Nenhuma transação válida foi encontrada nos arquivos. Verifique o formato e o conteúdo.");
       }
+      
+      dismissToast(toastId);
+      toastId = showLoading(`Enviando ${allTransactions.length} transações para a IA...`);
 
       const payload = {
         analysisData: {
           ...data,
           competenceDate: data.competenceDate.toISOString()
         },
-        files: filesContent
+        transactions: allTransactions
       };
 
       console.log(`Enviando payload para (${environment}):`, webhookUrl);
-      
+
       try {
         const response = await fetch(webhookUrl, {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
-          if (response.status === 413) {
-            throw new Error("Os arquivos são muito grandes para o servidor aceitar (Erro 413).");
-          }
+          if (response.status === 413) throw new Error("Os dados são muito grandes para o servidor (Erro 413).");
           throw new Error(`Erro no servidor da IA: ${response.status} ${response.statusText}`);
         }
 
         const responseData: AiProcessingResponse[] | AiProcessingResponse = await response.json();
-        
-        // n8n usualmente retorna um array, então pegamos o primeiro elemento.
-        // Isso também lida com casos onde um objeto único é retornado.
         const result = Array.isArray(responseData) ? responseData[0] : responseData;
         
-        console.log("Resposta da IA recebida e processada:", result);
+        console.log("Resposta da IA recebida:", result);
 
         if (!result || (!result.transacoesTributaveis && !result.transacoesNaoTributaveis)) {
-          throw new Error("A IA respondeu, mas o formato dos dados é inválido ou está vazio. Verifique a saída do n8n.");
+          throw new Error("A resposta da IA é inválida ou está vazia. Verifique o n8n.");
         }
 
         const taxable = (result.transacoesTributaveis || []).map((t, i) => ({
@@ -121,9 +127,9 @@ const Index = () => {
       }
 
     } catch (error) {
-      console.error("Erro no processo:", error);
+      console.error("Erro no processo de análise:", error);
       dismissToast(toastId);
-      showError(error instanceof Error ? error.message : "Erro desconhecido ao processar com a IA.");
+      showError(error instanceof Error ? error.message : "Ocorreu um erro desconhecido.");
     } finally {
       setIsProcessing(false);
     }
