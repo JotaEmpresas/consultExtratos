@@ -578,27 +578,31 @@ const readFileAsText = (file: File): Promise<string> => {
           return reject(new Error("Não foi possível ler o buffer do arquivo."));
         }
         const view = new Uint8Array(buffer);
+        let content: string;
 
-        let decoder;
-        // Check for UTF-16 LE BOM (FF FE)
+        // 1. Handle specific case: UTF-16 LE with BOM (for Banco da Amazônia)
         if (view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) {
-          console.log(`[readFileAsText] Detectado BOM UTF-16 LE para ${file.name}`);
-          decoder = new TextDecoder('utf-16le');
+          console.log(`[readFileAsText] Detectado BOM UTF-16 LE. Decodificando como utf-16le.`);
+          content = new TextDecoder('utf-16le').decode(buffer);
         } 
-        // Check for UTF-8 BOM (EF BB BF)
-        else if (view.length >= 3 && view[0] === 0xEF && view[1] === 0xBB && view[2] === 0xBF) {
-          console.log(`[readFileAsText] Detectado BOM UTF-8 para ${file.name}`);
-          decoder = new TextDecoder('utf-8');
-        } 
+        // 2. Handle all other cases with a robust fallback
         else {
-          // No BOM detected. Defaulting to a common encoding for Brazilian CSVs.
-          console.log(`[readFileAsText] Nenhum BOM detectado para ${file.name}. Usando windows-1252 como padrão.`);
-          decoder = new TextDecoder('windows-1252');
+          // Try decoding as UTF-8 first (most common)
+          let decodedAsUtf8 = new TextDecoder('utf-8').decode(buffer);
+
+          // If UTF-8 decoding results in replacement characters (�), it's likely the wrong encoding.
+          // This is a simple but effective heuristic.
+          if (decodedAsUtf8.includes('\uFFFD')) {
+            console.log(`[readFileAsText] Decodificação UTF-8 falhou. Tentando windows-1252.`);
+            // Fallback to windows-1252, common for Brazilian CSVs.
+            content = new TextDecoder('windows-1252').decode(buffer);
+          } else {
+            console.log(`[readFileAsText] Decodificação UTF-8 bem-sucedida.`);
+            content = decodedAsUtf8;
+          }
         }
 
-        let content = decoder.decode(buffer);
-
-        // The BOM might still be present at the start of the string after decoding
+        // The BOM character might still be present at the start of the string after decoding
         if (content.charCodeAt(0) === 0xFEFF) {
           content = content.substring(1);
         }
