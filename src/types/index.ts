@@ -15,7 +15,6 @@ export interface AnalysisData {
   partnerNames: string;
   totalInvoices: string;
   competenceDate: Date;
-  bank: string; // Bank identifier
 }
 
 // Estrutura que o seu Webhook DEVE retornar

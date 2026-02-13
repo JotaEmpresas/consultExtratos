@@ -5,7 +5,7 @@ import { MadeWithDyad } from "@/components/made-with-dyad";
 import { parsers } from "@/lib/parserRegistry";
 import { readFilesForWebhook } from "@/lib/fileReader";
 import { showError, showSuccess, showLoading, dismissToast } from "@/utils/toast";
-import { Transaction, AnalysisData, AiProcessingResponse } from "@/types";
+import { Transaction, AnalysisData } from "@/types";
 import { SettingsSheet } from "@/components/SettingsSheet";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
@@ -26,32 +26,38 @@ const Index = () => {
     return type === 'test' ? testUrl : prodUrl;
   };
 
-  const handleProcessAnalysis = async (data: AnalysisData, files: File[]) => {
+  const handleProcessAnalysis = async (data: AnalysisData, bankFiles: { bank: string, files: File[] }[]) => {
     setIsProcessing(true);
     setCorsError(false);
     let toastId = showLoading("Processando arquivos...");
 
     try {
-      const parser = parsers[data.bank];
-      if (!parser) {
-        throw new Error(`Parser para o banco selecionado (${data.bank}) não foi encontrado.`);
-      }
-
-      const filesContent = await readFilesForWebhook(files);
-      if (filesContent.length === 0) throw new Error("Nenhum arquivo pôde ser lido.");
-
       const cpfList = data.cpf.split(',').map(s => s.trim()).filter(Boolean);
       const nameList = data.partnerNames.split(',').map(s => s.trim()).filter(Boolean);
-
+      
       let allTransactions: Transaction[] = [];
-      for (const file of filesContent) {
-        try {
-          const parsedTransactions = await parser(file.content, data.cnpj, cpfList, nameList);
-          // Add source file info to each transaction
-          const transactionsWithSource = parsedTransactions.map((t, i) => ({ ...t, id: t.id || `${file.fileName}-${i}`, sourceFile: file.fileName }));
-          allTransactions.push(...transactionsWithSource);
-        } catch (error) {
-          showError(`Erro ao processar o arquivo ${file.fileName}: ${error instanceof Error ? error.message : "Erro desconhecido"}`);
+
+      for (const { bank, files } of bankFiles) {
+        const parser = parsers[bank];
+        if (!parser) {
+          showError(`Parser para o banco selecionado (${bank}) não foi encontrado. Pulando...`);
+          continue;
+        }
+
+        const filesContent = await readFilesForWebhook(files);
+        if (filesContent.length === 0) {
+            showError(`Nenhum arquivo do banco ${bank} pôde ser lido. Pulando...`);
+            continue;
+        }
+
+        for (const file of filesContent) {
+          try {
+            const parsedTransactions = await parser(file.content, data.cnpj, cpfList, nameList);
+            const transactionsWithSource = parsedTransactions.map((t, i) => ({ ...t, id: t.id || `${file.fileName}-${i}`, sourceFile: file.fileName }));
+            allTransactions.push(...transactionsWithSource);
+          } catch (error) {
+            showError(`Erro ao processar o arquivo ${file.fileName}: ${error instanceof Error ? error.message : "Erro desconhecido"}`);
+          }
         }
       }
 
