@@ -1,7 +1,7 @@
 import { Transaction } from '@/types';
 import Papa from 'papaparse';
 
-// Helper para converter moeda no formato "R$ 1,345.37" ou "-R$ 500.00"
+// Helper para converter moeda no formato "R$ 1,345.37"
 const parseCurrency = (value: string | undefined): number => {
   if (!value) return 0;
   // Remove "R$", espaços, e o separador de milhar (,)
@@ -11,23 +11,32 @@ const parseCurrency = (value: string | undefined): number => {
 
 export const parseSantander = (fileContent: string): Promise<Transaction[]> => {
   return new Promise((resolve, reject) => {
-    // O arquivo do Santander tem lixo no topo, então encontramos o cabeçalho primeiro.
     const lines = fileContent.split('\n');
     const headerRowIndex = lines.findIndex(line => 
-      line.startsWith('"Data,""Histórico"')
+      line.includes('"Data,""Histórico"')
     );
 
     if (headerRowIndex === -1) {
       return reject(new Error('Cabeçalho do CSV do Santander não encontrado. Verifique o arquivo.'));
     }
 
-    // Reconstrói o conteúdo a partir do cabeçalho correto
-    const csvContent = lines.slice(headerRowIndex).join('\n');
+    // Limpa as linhas para que fiquem em um formato CSV válido que o PapaParse entenda
+    const cleanedLines = lines.slice(headerRowIndex).map(line => {
+        let cleaned = line.trim();
+        // 1. Remove as aspas que envolvem a linha inteira
+        if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+            cleaned = cleaned.substring(1, cleaned.length - 1);
+        }
+        // 2. Substitui as aspas duplas ("") que o banco usa para delimitar campos por aspas simples (")
+        cleaned = cleaned.replace(/""/g, '"');
+        return cleaned;
+    });
+
+    const csvContent = cleanedLines.join('\n');
 
     Papa.parse(csvContent, {
       header: true,
       skipEmptyLines: true,
-      // O PapaParse lida com as aspas duplas automaticamente
       complete: (results) => {
         const transactions: Transaction[] = [];
         
@@ -44,7 +53,6 @@ export const parseSantander = (fileContent: string): Promise<Transaction[]> => {
               category: 'taxable', // Categoria padrão
             };
             
-            // Validação básica
             if (transaction.date && transaction.description) {
               transactions.push(transaction);
             }
