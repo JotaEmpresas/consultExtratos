@@ -580,29 +580,28 @@ const readFileAsText = (file: File): Promise<string> => {
         const view = new Uint8Array(buffer);
         let content: string;
 
-        // 1. Handle specific case: UTF-16 LE with BOM (for Banco da Amazônia)
+        // VIA EXPRESSA: Trata o caso especial do Banco da Amazônia (UTF-16 LE)
         if (view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) {
-          console.log(`[readFileAsText] Detectado BOM UTF-16 LE. Decodificando como utf-16le.`);
+          console.log(`[readFileAsText] VIA EXPRESSA: Detectado UTF-16 LE para ${file.name}.`);
           content = new TextDecoder('utf-16le').decode(buffer);
         } 
-        // 2. Handle all other cases with a robust fallback
+        // VIA PADRÃO: Trata todos os outros arquivos
         else {
-          // Try decoding as UTF-8 first (most common)
-          let decodedAsUtf8 = new TextDecoder('utf-8').decode(buffer);
-
-          // If UTF-8 decoding results in replacement characters (�), it's likely the wrong encoding.
-          // This is a simple but effective heuristic.
+          console.log(`[readFileAsText] VIA PADRÃO para ${file.name}.`);
+          // Tenta UTF-8 primeiro, que é o padrão web
+          const decodedAsUtf8 = new TextDecoder('utf-8').decode(buffer);
+          // Se a decodificação UTF-8 gerar caracteres de substituição (�),
+          // é um sinal forte de que a codificação está errada.
+          // Nesse caso, tentamos 'windows-1252', muito comum em arquivos CSV do Brasil.
           if (decodedAsUtf8.includes('\uFFFD')) {
-            console.log(`[readFileAsText] Decodificação UTF-8 falhou. Tentando windows-1252.`);
-            // Fallback to windows-1252, common for Brazilian CSVs.
+            console.log(`[readFileAsText] Fallback para windows-1252.`);
             content = new TextDecoder('windows-1252').decode(buffer);
           } else {
-            console.log(`[readFileAsText] Decodificação UTF-8 bem-sucedida.`);
             content = decodedAsUtf8;
           }
         }
 
-        // The BOM character might still be present at the start of the string after decoding
+        // Remove o caractere BOM (Byte Order Mark) se ele ainda estiver no início do texto
         if (content.charCodeAt(0) === 0xFEFF) {
           content = content.substring(1);
         }
