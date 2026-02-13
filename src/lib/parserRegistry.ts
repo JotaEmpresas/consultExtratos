@@ -5,10 +5,12 @@ import { parseNubank } from './parsers/nubank';
 import { parseSicredi } from './parsers/sicredi';
 import { parseSantander } from './parsers/santander';
 import { parseBancoDoBrasil } from './parsers/bancoDoBrasil';
+import { parseInfinitPay } from './parsers/infinitPay';
 
 export const bankOptions = [
   { value: 'banco-da-amazonia', label: 'Banco da Amazônia' },
   { value: 'banco-do-brasil', label: 'Banco do Brasil' },
+  { value: 'infinitpay', label: 'InfinitPay' },
   { value: 'nubank', label: 'Nubank' },
   { value: 'santander', label: 'Santander' },
   { value: 'sicredi', label: 'Sicredi' },
@@ -19,6 +21,7 @@ export const bankOptions = [
 export const parsers: { [key: string]: (fileContent: string, companyCnpj: string, cpfList: string[], nameList: string[]) => Promise<Transaction[]> } = {
   'banco-da-amazonia': parseBancoDaAmazonia,
   'banco-do-brasil': parseBancoDoBrasil,
+  'infinitpay': parseInfinitPay,
   'nubank': parseNubank,
   'santander': parseSantander,
   'sicredi': parseSicredi,
