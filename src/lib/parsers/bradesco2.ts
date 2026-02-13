@@ -31,8 +31,9 @@ export const parseBradesco2 = (
         let dateIndex = -1;
         let descriptionIndex = -1;
         let creditIndex = -1;
+        let valueIndex = -1;
+        let debitIndex = -1;
 
-        // Find the first valid header row by looking for 'data' and 'lan' (robust to encoding issues)
         const headerRowIndex = results.data.findIndex((row: any) => {
             if (!Array.isArray(row)) return false;
             const normalizedRow = row.map(c => normalize(String(c || '')));
@@ -43,34 +44,42 @@ export const parseBradesco2 = (
             const header: string[] = results.data[headerRowIndex].map((h: any) => normalize(String(h || '')));
             headerFound = true;
             dateIndex = header.findIndex(h => h.includes('data'));
-            descriptionIndex = header.findIndex(h => h.includes('lan')); // 'lan' for 'lançamento'
-            creditIndex = header.findIndex(h => h.includes('credit')); // 'credit' for 'crédito'
+            descriptionIndex = header.findIndex(h => h.includes('lan'));
+            creditIndex = header.findIndex(h => h.includes('credit'));
+            debitIndex = header.findIndex(h => h.includes('debit'));
+            valueIndex = header.findIndex(h => h.includes('valor'));
         } else {
-            // Fallback for format without an explicit or detectable header
             dateIndex = 0;
             descriptionIndex = 1;
             creditIndex = 3;
+            debitIndex = 2;
         }
 
         const dataToParse = headerFound ? results.data.slice(headerRowIndex + 1) : results.data;
 
         dataToParse.forEach((row: any, index: number) => {
-          if (!Array.isArray(row) || dateIndex === -1 || descriptionIndex === -1 || creditIndex === -1) {
+          if (!Array.isArray(row) || dateIndex === -1 || descriptionIndex === -1) {
             return;
           }
 
           const dateStr = row[dateIndex]?.trim();
           const description = row[descriptionIndex]?.trim() || '';
           
-          // Check if it's a valid date and not a summary line like "Total" or "SALDO ANTERIOR"
           if (!dateStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr) || normalize(description).includes('saldo anterior')) {
             return;
           }
 
-          const creditStr = row[creditIndex];
-          const amount = parseCurrency(creditStr);
+          let amount = 0;
 
-          // We only care about credit transactions with a positive amount
+          if (creditIndex !== -1 && row[creditIndex]) {
+            amount = parseCurrency(row[creditIndex]);
+          } else if (valueIndex !== -1 && row[valueIndex]) {
+            const parsed = parseCurrency(row[valueIndex]);
+            if (parsed > 0) {
+              amount = parsed;
+            }
+          }
+
           if (amount > 0) {
             const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
