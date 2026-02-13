@@ -9,9 +9,10 @@ Banco do Brasil
 PagBank
 Inter
 PagSeguro
-nunbank
+Nunbank -ok
 bradesco
 banco do brasil 2
-stonestone
+Estone- ok
 stone 2
 infinit pay
+Santander - okBanco da Amazonia - ok
