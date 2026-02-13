@@ -13,6 +13,7 @@ import { parseC6Bank } from './parsers/c6bank';
 import { parsePagBank } from './parsers/pagbank';
 import { parseCora } from './parsers/cora';
 import { parseInter } from './parsers/inter';
+import { parseSantander2 } from './parsers/santander2';
 
 export const bankOptions = [
   { value: 'banco-da-amazonia', label: 'Banco da Amazônia' },
@@ -27,6 +28,7 @@ export const bankOptions = [
   { value: 'nubank', label: 'Nubank' },
   { value: 'pagbank', label: 'PagBank' },
   { value: 'santander', label: 'Santander' },
+  { value: 'santander-2', label: 'Santander (Formato 2)' },
   { value: 'sicredi', label: 'Sicredi' },
   { value: 'stone', label: 'Stone' },
   // Futuros bancos serão adicionados aqui
@@ -45,6 +47,7 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'nubank': parseNubank,
   'pagbank': parsePagBank,
   'santander': parseSantander,
+  'santander-2': parseSantander2,
   'sicredi': parseSicredi,
   'stone': parseStone,
 };
