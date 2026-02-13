@@ -10,6 +10,7 @@ import { parseItau } from './parsers/itau';
 import { parseBradesco } from './parsers/bradesco';
 import { parseMercadoPago } from './parsers/mercadoPago';
 import { parseC6Bank } from './parsers/c6bank';
+import { parsePagBank } from './parsers/pagbank';
 
 export const bankOptions = [
   { value: 'banco-da-amazonia', label: 'Banco da Amazônia' },
@@ -20,6 +21,7 @@ export const bankOptions = [
   { value: 'itau', label: 'Itaú' },
   { value: 'mercado-pago', label: 'Mercado Pago' },
   { value: 'nubank', label: 'Nubank' },
+  { value: 'pagbank', label: 'PagBank' },
   { value: 'santander', label: 'Santander' },
   { value: 'sicredi', label: 'Sicredi' },
   { value: 'stone', label: 'Stone' },
@@ -35,6 +37,7 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'itau': parseItau,
   'mercado-pago': parseMercadoPago,
   'nubank': parseNubank,
+  'pagbank': parsePagBank,
   'santander': parseSantander,
   'sicredi': parseSicredi,
   'stone': parseStone,
