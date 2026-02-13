@@ -575,40 +575,42 @@ const readFileAsText = (file: File): Promise<string> => {
       try {
         const buffer = e.target?.result as ArrayBuffer;
         if (!buffer) {
-          return reject(new Error("Failed to read file buffer."));
+          return reject(new Error("Não foi possível ler o buffer do arquivo."));
         }
         const view = new Uint8Array(buffer);
-        let content: string;
 
-        // Check for UTF-16 LE BOM (FF FE) - for Banco da Amazônia file
+        let decoder;
+        // Check for UTF-16 LE BOM (FF FE)
         if (view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) {
-          content = new TextDecoder('utf-16le').decode(buffer);
-        } else {
-          // Original logic that worked for other files
-          const utf8Decoder = new TextDecoder('utf-8');
-          content = utf8Decoder.decode(buffer);
-          
-          // Fallback for files that are not UTF-8
-          if (content.includes('\uFFFD')) {
-            console.log("UTF-8 decoding resulted in replacement characters, trying windows-1252.");
-            const isoDecoder = new TextDecoder('windows-1252');
-            content = isoDecoder.decode(buffer);
-          }
+          console.log(`[readFileAsText] Detectado BOM UTF-16 LE para ${file.name}`);
+          decoder = new TextDecoder('utf-16le');
+        } 
+        // Check for UTF-8 BOM (EF BB BF)
+        else if (view.length >= 3 && view[0] === 0xEF && view[1] === 0xBB && view[2] === 0xBF) {
+          console.log(`[readFileAsText] Detectado BOM UTF-8 para ${file.name}`);
+          decoder = new TextDecoder('utf-8');
+        } 
+        else {
+          // No BOM detected. Defaulting to a common encoding for Brazilian CSVs.
+          console.log(`[readFileAsText] Nenhum BOM detectado para ${file.name}. Usando windows-1252 como padrão.`);
+          decoder = new TextDecoder('windows-1252');
         }
-        
-        // Remove BOM character if it's still there after decoding
+
+        let content = decoder.decode(buffer);
+
+        // The BOM might still be present at the start of the string after decoding
         if (content.charCodeAt(0) === 0xFEFF) {
           content = content.substring(1);
         }
         
         resolve(content);
       } catch (error) {
-        console.error("Error decoding file:", error);
+        console.error("Erro ao decodificar o arquivo:", error);
         reject(error);
       }
     };
     reader.onerror = (e) => {
-      console.error("Error reading file:", e);
+      console.error("Erro ao ler o arquivo:", e);
       reject(e);
     };
     reader.readAsArrayBuffer(file);
