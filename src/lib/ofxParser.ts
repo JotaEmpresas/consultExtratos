@@ -16,11 +16,9 @@ export const parseOfxFile = async (
   fileContent: string,
   fileName: string,
   companyCnpj: string,
-  partnerCpf: string
+  cpfList: string[],
+  nameList: string[]
 ): Promise<Transaction[]> => {
-  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
-  const cleanPartnerCpf = partnerCpf.replace(/\D/g, '');
-
   try {
     const ofxData = await parse(fileContent);
     const statement = ofxData.OFX.BANKMSGSRSV1?.STMTTRNRS?.STMTRS;
@@ -34,10 +32,15 @@ export const parseOfxFile = async (
       .filter(t => t.TRNTYPE === 'CREDIT' && parseFloat(t.TRNAMT) > 0)
       .map((t, index) => {
         const description = t.MEMO || '';
-        const isOwnAccount = description.includes(cleanCompanyCnpj) || description.includes(cleanPartnerCpf);
+        const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+        const isOwnAccount = 
+          (companyCnpj && normalizedDesc.includes(companyCnpj)) ||
+          cpfList.some(cpf => cpf && normalizedDesc.includes(cpf)) ||
+          nameList.some(name => name && normalizedDesc.includes(name));
 
         return {
-          id: `${fileName}-nubank-${index}`,
+          id: `${fileName}-ofx-${index}`,
           date: formatDate(t.DTPOSTED),
           description: description,
           amount: parseFloat(t.TRNAMT),

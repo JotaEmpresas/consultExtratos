@@ -22,6 +22,7 @@ interface AnalysisFormProps {
 export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
   const [cnpj, setCnpj] = useState('');
   const [cpf, setCpf] = useState('');
+  const [partnerNames, setPartnerNames] = useState('');
   const [totalInvoices, setTotalInvoices] = useState('');
   const [competenceDate, setCompetenceDate] = useState<Date | undefined>(new Date());
   const [files, setFiles] = useState<File[]>([]);
@@ -38,13 +39,8 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
   };
 
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '');
-    const maskedValue = value
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})/, '$1-$2')
-      .slice(0, 14);
-    setCpf(maskedValue);
+    const value = e.target.value;
+    setCpf(value);
   };
   
   const handleTotalInvoicesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,7 +49,7 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
     setTotalInvoices(numericValue);
   };
 
-  const isFormValid = cnpj.length === 18 && cpf.length === 14 && files.length > 0 && competenceDate && !isProcessing;
+  const isFormValid = cnpj.length === 18 && cpf.length > 0 && files.length > 0 && competenceDate && !isProcessing;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +58,7 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
     onSubmit({
       cnpj,
       cpf,
+      partnerNames,
       totalInvoices: totalInvoices || '0',
       competenceDate,
     }, files);
@@ -81,9 +78,13 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
               <Input id="cnpj" placeholder="00.000.000/0000-00" value={cnpj} onChange={handleCnpjChange} required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cpf">CPF do Sócio</Label>
-              <Input id="cpf" placeholder="000.000.000-00" value={cpf} onChange={handleCpfChange} required />
+              <Label htmlFor="cpf">CPFs dos Sócios (separado por vírgula)</Label>
+              <Input id="cpf" placeholder="000.000.000-00, 111.111.111-11" value={cpf} onChange={handleCpfChange} required />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="partner-names">Nomes dos Sócios (separado por vírgula)</Label>
+            <Input id="partner-names" placeholder="Nome Sobrenome, Outro Nome" value={partnerNames} onChange={(e) => setPartnerNames(e.target.value)} />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">

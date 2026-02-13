@@ -12,6 +12,7 @@ export interface Transaction {
 export interface AnalysisData {
   cnpj: string;
   cpf: string;
+  partnerNames: string;
   totalInvoices: string;
   competenceDate: Date;
 }

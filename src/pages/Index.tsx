@@ -21,7 +21,7 @@ const Index = () => {
   const handleProcessAnalysis = async (data: AnalysisData, files: File[]) => {
     setIsProcessing(true);
     try {
-      const allParsedTransactions = await parseFiles(files, data.cnpj, data.cpf);
+      const allParsedTransactions = await parseFiles(files, data.cnpj, data.cpf, data.partnerNames);
       console.log(`[Filtro] Total de transações extraídas dos arquivos: ${allParsedTransactions.length}`);
       
       const selectedMonth = data.competenceDate.getMonth();

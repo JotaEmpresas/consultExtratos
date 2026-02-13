@@ -71,9 +71,32 @@ const findHeaderLineIndex = (lines: string[], keywords: string[]): number => {
   return index;
 };
 
+// Helper para verificar se é transferência de sócio/empresa
+const isNonTaxable = (
+  description: string,
+  document: string | undefined,
+  companyCnpj: string,
+  cpfList: string[],
+  nameList: string[]
+): boolean => {
+  const normalizedDesc = normalizeString(description);
+  const cleanDocument = document?.replace(/\D/g, '') || '';
+
+  if (cleanDocument) {
+    if (cleanDocument === companyCnpj) return true;
+    if (cpfList.includes(cleanDocument)) return true;
+  }
+
+  if (companyCnpj && normalizedDesc.includes(companyCnpj)) return true;
+  if (cpfList.some(cpf => cpf && normalizedDesc.includes(cpf))) return true;
+  if (nameList.some(name => name && normalizedDesc.includes(name))) return true;
+  
+  return false;
+};
+
 // --- PARSERS ESPECÍFICOS ---
 
-const parseInfinitPay = (content: string, fileName: string): Transaction[] => {
+const parseInfinitPay = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   console.log(`[parseInfinitPay] Iniciando parser para ${fileName}`);
   const lines = content.split(/\r?\n/);
   const headerIndex = findHeaderLineIndex(lines, ['Date', 'Transaction Type', 'Amount']);
@@ -84,89 +107,61 @@ const parseInfinitPay = (content: string, fileName: string): Transaction[] => {
   }
 
   const cleanContent = lines.slice(headerIndex).join('\n');
-  console.log(`[parseInfinitPay] Conteúdo limpo enviado para o PapaParse:\n${cleanContent.substring(0, 500)}...`);
-
   const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
-  console.log(`[parseInfinitPay] PapaParse encontrou ${data.length} linhas.`);
 
-  const transactions = data
+  return data
     .filter(row => {
       const amountStr = getVal(row, ['Amount']) || '';
-      const isCredit = amountStr.includes('+');
-      const amount = parseCurrency(amountStr);
-      const isValid = isCredit && amount > 0;
-      if (!isValid && amountStr) {
-        console.log(`[parseInfinitPay] Filtrando linha: Amount='${amountStr}'`);
-      }
-      return isValid;
+      return amountStr.includes('+') && parseCurrency(amountStr) > 0;
     })
     .map((row, index) => {
       const name = getVal(row, ['Name']) || '';
       const detail = getVal(row, ['Detail']) || '';
       const description = [name, detail].filter(Boolean).join(' - ');
 
-      const transaction = {
+      return {
         id: `${fileName}-infinitpay-${index}`,
         date: normalizeDate(getVal(row, ['Date'])),
         description: description,
         amount: parseCurrency(getVal(row, ['Amount'])),
         sourceFile: fileName,
-        category: 'taxable',
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
       };
-      console.log(`[parseInfinitPay] Mapeada transação: ${JSON.stringify(transaction)}`);
-      return transaction;
     });
-  
-  console.log(`[parseInfinitPay] Filtrou e mapeou ${transactions.length} transações válidas.`);
-  return transactions;
 };
 
-const parseStone = (content: string, fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
+const parseStone = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const lines = content.split(/\r?\n/);
   const headerIndex = findHeaderLineIndex(lines, ['Movimentação', 'Tipo', 'Valor', 'Data']);
   if (headerIndex === -1) return [];
 
-  // Check to avoid conflict with Stone2
-  if (normalizeString(lines[headerIndex]).includes(normalizeString('Saldo antes'))) {
-    return [];
-  }
+  if (normalizeString(lines[headerIndex]).includes(normalizeString('Saldo antes'))) return [];
 
   const cleanContent = lines.slice(headerIndex).join('\n');
   const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
 
-  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
-  const cleanPartnerCpf = partnerCpf.replace(/\D/g, '');
-
   return data
-    .filter(row => {
-      const mov = normalizeString((getVal(row, ['Movimentação']) || '').toString());
-      const isCredit = mov.includes('credito');
-      const val = parseCurrency(getVal(row, ['Valor']));
-      return isCredit && val > 0;
-    })
+    .filter(row => normalizeString((getVal(row, ['Movimentação']) || '').toString()).includes('credito') && parseCurrency(getVal(row, ['Valor'])) > 0)
     .map((row, index) => {
-      const originDocument = getVal(row, ['Origem Documento'])?.toString().replace(/\D/g, '');
+      const originDocument = getVal(row, ['Origem Documento'])?.toString();
       const tipo = getVal(row, ['Tipo']) || '';
       const origem = getVal(row, ['Origem']) || '';
       const description = `${tipo} - ${origem}`.trim();
-      const isOwnAccount = originDocument && (originDocument === cleanCompanyCnpj || originDocument === cleanPartnerCpf);
-      const dateStr = getVal(row, ['Data']) || '';
-      const formattedDate = normalizeDate(dateStr);
-
+      
       return {
-        id: `${fileName}-stone-${index}-${formattedDate}`,
-        date: formattedDate,
+        id: `${fileName}-stone-${index}`,
+        date: normalizeDate(getVal(row, ['Data'])),
         description: description,
         amount: parseCurrency(getVal(row, ['Valor'])),
         sourceFile: fileName,
-        category: isOwnAccount ? 'non-taxable' : 'taxable',
+        category: isNonTaxable(description, originDocument, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
       };
     });
 };
 
-const parseStone2 = (content: string, fileName: string, companyCnpj: string, partnerCpf: string): Transaction[] => {
+const parseStone2 = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const lines = content.split(/\r?\n/);
   const headerIndex = findHeaderLineIndex(lines, ['Movimentação', 'Tipo', 'Valor', 'Saldo antes', 'Destino Documento']);
   if (headerIndex === -1) return [];
@@ -175,37 +170,26 @@ const parseStone2 = (content: string, fileName: string, companyCnpj: string, par
   const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
 
-  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
-  const cleanPartnerCpf = partnerCpf.replace(/\D/g, '');
-
   return data
-    .filter(row => {
-      const mov = normalizeString((getVal(row, ['Movimentação']) || '').toString());
-      const isCredit = mov.includes('credito');
-      const val = parseCurrency(getVal(row, ['Valor']));
-      return isCredit && val > 0;
-    })
+    .filter(row => normalizeString((getVal(row, ['Movimentação']) || '').toString()).includes('credito') && parseCurrency(getVal(row, ['Valor'])) > 0)
     .map((row, index) => {
-      const originDocument = getVal(row, ['Origem Documento'])?.toString().replace(/\D/g, '');
+      const originDocument = getVal(row, ['Origem Documento'])?.toString();
       const tipo = getVal(row, ['Tipo']) || '';
       const origem = getVal(row, ['Origem']) || '';
       const description = `${tipo} - ${origem}`.trim();
-      const isOwnAccount = originDocument && (originDocument === cleanCompanyCnpj || originDocument === cleanPartnerCpf);
-      const dateStr = getVal(row, ['Data']) || '';
-      const formattedDate = normalizeDate(dateStr);
 
       return {
-        id: `${fileName}-stone2-${index}-${formattedDate}`,
-        date: formattedDate,
+        id: `${fileName}-stone2-${index}`,
+        date: normalizeDate(getVal(row, ['Data'])),
         description: description,
         amount: parseCurrency(getVal(row, ['Valor'])),
         sourceFile: fileName,
-        category: isOwnAccount ? 'non-taxable' : 'taxable',
+        category: isNonTaxable(description, originDocument, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
       };
     });
 };
 
-const parseC6Bank = (content: string, fileName: string): Transaction[] => {
+const parseC6Bank = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const lines = content.split(/\r?\n/);
   const headerIndex = findHeaderLineIndex(lines, ['Data Lançamento', 'Título', 'Entrada(R$)']);
   if (headerIndex === -1) return [];
@@ -215,41 +199,43 @@ const parseC6Bank = (content: string, fileName: string): Transaction[] => {
   
   return (results.data as any[])
     .filter(row => parseCurrency(getVal(row, ['Entrada(R$)'])) > 0)
-    .map((row, index) => ({
-      id: `${fileName}-c6-${index}`,
-      date: normalizeDate(getVal(row, ['Data Lançamento'])),
-      description: getVal(row, ['Título']) || '',
-      amount: parseCurrency(getVal(row, ['Entrada(R$)'])),
-      sourceFile: fileName,
-      category: 'taxable',
-    }));
+    .map((row, index) => {
+      const description = getVal(row, ['Título']) || '';
+      return {
+        id: `${fileName}-c6-${index}`,
+        date: normalizeDate(getVal(row, ['Data Lançamento'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['Entrada(R$)'])),
+        sourceFile: fileName,
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
+      };
+    });
 };
 
-const parseBradesco = (content: string, fileName: string, companyCnpj: string): Transaction[] => {
+const parseBradesco = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const lines = content.split(/\r?\n/);
   const headerIndex = findHeaderLineIndex(lines, ['Data', 'Lançamento', 'Crédito (R$)']);
   if (headerIndex === -1) return [];
 
   const cleanContent = lines.slice(headerIndex).join('\n');
   const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
-  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
 
   return (results.data as any[])
     .filter(row => parseCurrency(getVal(row, ['Crédito (R$)'])) > 0)
     .map((row, index) => {
-      const desc = getVal(row, ['Lançamento']) || '';
+      const description = getVal(row, ['Lançamento']) || '';
       return {
         id: `${fileName}-bradesco-${index}`,
         date: normalizeDate(getVal(row, ['Data'])),
-        description: desc,
+        description: description,
         amount: parseCurrency(getVal(row, ['Crédito (R$)'])),
         sourceFile: fileName,
-        category: desc.includes(cleanCompanyCnpj) ? 'non-taxable' : 'taxable',
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
       };
     });
 };
 
-const parseMercadoPago = (content: string, fileName: string): Transaction[] => {
+const parseMercadoPago = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const lines = content.split(/\r?\n/);
   const headerIndex = findHeaderLineIndex(lines, ['RELEASE_DATE', 'TRANSACTION_TYPE', 'TRANSACTION_NET_AMOUNT']);
   if (headerIndex === -1) return [];
@@ -259,17 +245,20 @@ const parseMercadoPago = (content: string, fileName: string): Transaction[] => {
 
   return (results.data as any[])
     .filter(row => parseCurrency(getVal(row, ['TRANSACTION_NET_AMOUNT'])) > 0)
-    .map((row, index) => ({
-      id: `${fileName}-mp-${index}`,
-      date: normalizeDate(getVal(row, ['RELEASE_DATE'])),
-      description: getVal(row, ['TRANSACTION_TYPE']) || '',
-      amount: parseCurrency(getVal(row, ['TRANSACTION_NET_AMOUNT'])),
-      sourceFile: fileName,
-      category: 'taxable',
-    }));
+    .map((row, index) => {
+      const description = getVal(row, ['TRANSACTION_TYPE']) || '';
+      return {
+        id: `${fileName}-mp-${index}`,
+        date: normalizeDate(getVal(row, ['RELEASE_DATE'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['TRANSACTION_NET_AMOUNT'])),
+        sourceFile: fileName,
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
+      };
+    });
 };
 
-const parseNubankCsv = (content: string, fileName: string): Transaction[] => {
+const parseNubankCsv = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const results = Papa.parse(content, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
   
@@ -277,17 +266,20 @@ const parseNubankCsv = (content: string, fileName: string): Transaction[] => {
 
   return data
     .filter(row => parseCurrency(getVal(row, ['Valor'])) > 0)
-    .map((row, index) => ({
-      id: getVal(row, ['Identificador']) || `${fileName}-nubank-${index}`,
-      date: normalizeDate(getVal(row, ['Data'])),
-      description: getVal(row, ['Descrição']) || '',
-      amount: parseCurrency(getVal(row, ['Valor'])),
-      sourceFile: fileName,
-      category: (getVal(row, ['Descrição']) || '').toLowerCase().includes('resgate') ? 'non-taxable' : 'taxable',
-    }));
+    .map((row, index) => {
+      const description = getVal(row, ['Descrição']) || '';
+      return {
+        id: getVal(row, ['Identificador']) || `${fileName}-nubank-${index}`,
+        date: normalizeDate(getVal(row, ['Data'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['Valor'])),
+        sourceFile: fileName,
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
+      };
+    });
 };
 
-const parseInter = (content: string, fileName: string): Transaction[] => {
+const parseInter = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const results = Papa.parse(content, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
   
@@ -295,17 +287,20 @@ const parseInter = (content: string, fileName: string): Transaction[] => {
 
   return data
     .filter(row => normalizeString(getVal(row, ['Tipo Transação']) || '').includes('credito'))
-    .map((row, index) => ({
-      id: `${fileName}-inter-${index}`,
-      date: normalizeDate(getVal(row, ['Data'])),
-      description: getVal(row, ['Transação']) || '',
-      amount: parseCurrency(getVal(row, ['Valor'])),
-      sourceFile: fileName,
-      category: 'taxable',
-    }));
+    .map((row, index) => {
+      const description = getVal(row, ['Transação']) || '';
+      return {
+        id: `${fileName}-inter-${index}`,
+        date: normalizeDate(getVal(row, ['Data'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['Valor'])),
+        sourceFile: fileName,
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
+      };
+    });
 };
 
-const parseItau = (content: string, fileName: string): Transaction[] => {
+const parseItau = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const results = Papa.parse(content, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
   
@@ -313,46 +308,43 @@ const parseItau = (content: string, fileName: string): Transaction[] => {
 
   return data
     .filter(row => parseCurrency(getVal(row, ['Valor (R$)'])) > 0)
-    .map((row, index) => ({
-      id: `${fileName}-itau-${index}`,
-      date: normalizeDate(getVal(row, ['Data'])),
-      description: getVal(row, ['Lançamento']) || '',
-      amount: parseCurrency(getVal(row, ['Valor (R$)'])),
-      sourceFile: fileName,
-      category: 'taxable',
-    }));
+    .map((row, index) => {
+      const description = getVal(row, ['Lançamento']) || '';
+      return {
+        id: `${fileName}-itau-${index}`,
+        date: normalizeDate(getVal(row, ['Data'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['Valor (R$)'])),
+        sourceFile: fileName,
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
+      };
+    });
 };
 
-const parseItau2 = (content: string, fileName: string): Transaction[] => {
-  console.log(`[Parser] Tentando Itaú 2 (com metadados) para ${fileName}`);
+const parseItau2 = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const lines = content.split(/\r?\n/);
   const headerIndex = findHeaderLineIndex(lines, ['Data', 'Lançamento', 'Valor (R$)', 'Saldo (R$)']);
   if (headerIndex === -1) return [];
 
   const cleanContent = lines.slice(headerIndex).join('\n');
-  const results = Papa.parse(cleanContent, {
-    header: true,
-    skipEmptyLines: true,
-    delimiter: ';'
-  });
+  const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true, delimiter: ';' });
   
   return (results.data as any[])
-    .filter(row => {
-      const val = parseCurrency(getVal(row, ['Valor (R$)']));
-      const desc = (getVal(row, ['Lançamento']) || '').toString().toUpperCase();
-      return val > 0 && !desc.includes('SALDO TOTAL');
-    })
-    .map((row, index) => ({
-      id: `${fileName}-itau2-${index}`,
-      date: normalizeDate(getVal(row, ['Data'])),
-      description: getVal(row, ['Lançamento']) || '',
-      amount: parseCurrency(getVal(row, ['Valor (R$)'])),
-      sourceFile: fileName,
-      category: 'taxable',
-    }));
+    .filter(row => parseCurrency(getVal(row, ['Valor (R$)'])) > 0 && !normalizeString(getVal(row, ['Lançamento'])).includes('saldo total'))
+    .map((row, index) => {
+      const description = getVal(row, ['Lançamento']) || '';
+      return {
+        id: `${fileName}-itau2-${index}`,
+        date: normalizeDate(getVal(row, ['Data'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['Valor (R$)'])),
+        sourceFile: fileName,
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
+      };
+    });
 };
 
-const parseCora = (content: string, fileName: string): Transaction[] => {
+const parseCora = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const results = Papa.parse(content, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
   
@@ -360,72 +352,53 @@ const parseCora = (content: string, fileName: string): Transaction[] => {
 
   return data
     .filter(row => normalizeString(getVal(row, ['Tipo']) || '').includes('credito'))
-    .map((row, index) => ({
-      id: `${fileName}-cora-${index}`,
-      date: normalizeDate(getVal(row, ['Data'])),
-      description: getVal(row, ['Histórico']) || '',
-      amount: parseCurrency(getVal(row, ['Valor (R$)'])),
-      sourceFile: fileName,
-      category: 'taxable',
-    }));
+    .map((row, index) => {
+      const description = getVal(row, ['Histórico']) || '';
+      return {
+        id: `${fileName}-cora-${index}`,
+        date: normalizeDate(getVal(row, ['Data'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['Valor (R$)'])),
+        sourceFile: fileName,
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
+      };
+    });
 };
 
-const parseBB2 = (content: string, fileName: string): Transaction[] => {
-  console.log(`[parseBB2] Iniciando parser para ${fileName}`);
+const parseBB2 = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const lines = content.split(/\r?\n/);
   const headerIndex = findHeaderLineIndex(lines, ['Data', 'Lançamento', 'Valor']);
-  
-  if (headerIndex === -1) {
-    console.error(`[parseBB2] Cabeçalho não encontrado em ${fileName}.`);
-    return [];
-  }
+  if (headerIndex === -1) return [];
 
   const cleanContent = lines.slice(headerIndex).join('\n');
   const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
-  console.log(`[parseBB2] PapaParse encontrou ${data.length} linhas.`);
 
-  const transactions = data
+  return data
     .map((row, index) => {
       const lancamento = getVal(row, ['Lançamento']);
       const valorStr = getVal(row, ['Valor']);
-
-      if (!lancamento || !valorStr) {
-        return null;
-      }
+      if (!lancamento || !valorStr || parseCurrency(valorStr) <= 0) return null;
 
       const lowerLancamento = normalizeString(lancamento);
-      const keywordsToFilter = ['saldo do dia', 's a l d o', 'bb rende facil', 'saldo anterior'];
-      if (keywordsToFilter.some(keyword => lowerLancamento.includes(keyword))) {
-        console.log(`[parseBB2] Filtrando linha por palavra-chave: ${lancamento}`);
-        return null;
-      }
+      if (['saldo do dia', 's a l d o', 'bb rende facil', 'saldo anterior'].some(k => lowerLancamento.includes(k))) return null;
 
-      const amount = parseCurrency(valorStr);
-      if (amount <= 0) {
-        return null;
-      }
-
-      const dateStr = getVal(row, ['Data']);
       const detalhes = getVal(row, ['Detalhes']);
       const description = detalhes ? `${lancamento} - ${detalhes}`.trim() : lancamento.trim();
       
       return {
         id: `${fileName}-bb2-${index}`,
-        date: normalizeDate(dateStr),
+        date: normalizeDate(getVal(row, ['Data'])),
         description: description,
-        amount: amount,
+        amount: parseCurrency(valorStr),
         sourceFile: fileName,
-        category: 'taxable',
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
       };
     })
     .filter(Boolean) as Transaction[];
-  
-  console.log(`[parseBB2] Filtrou e mapeou ${transactions.length} transações válidas.`);
-  return transactions;
 };
 
-const parseBancoTradicional = (content: string, fileName: string): Transaction[] => {
+const parseBancoTradicional = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const results = Papa.parse(content, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
   
@@ -433,17 +406,20 @@ const parseBancoTradicional = (content: string, fileName: string): Transaction[]
 
   return data
     .filter(row => getVal(row, ['Sinal']) === 'C')
-    .map((row, index) => ({
-      id: `${fileName}-bb-${index}`,
-      date: normalizeDate(getVal(row, ['Data'])),
-      description: getVal(row, ['Histórico']) || '',
-      amount: parseCurrency(getVal(row, ['Valor'])),
-      sourceFile: fileName,
-      category: 'taxable',
-    }));
+    .map((row, index) => {
+      const description = getVal(row, ['Histórico']) || '';
+      return {
+        id: `${fileName}-bb-${index}`,
+        date: normalizeDate(getVal(row, ['Data'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['Valor'])),
+        sourceFile: fileName,
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
+      };
+    });
 };
 
-const parsePagBank = (content: string, fileName: string): Transaction[] => {
+const parsePagBank = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const results = Papa.parse(content, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
   
@@ -451,17 +427,20 @@ const parsePagBank = (content: string, fileName: string): Transaction[] => {
 
   return data
     .filter(row => parseCurrency(getVal(row, ['Valor bruto'])) > 0)
-    .map((row, index) => ({
-      id: `${fileName}-pagbank-${index}`,
-      date: normalizeDate(getVal(row, ['Data da transação'])),
-      description: getVal(row, ['Descrição']) || '',
-      amount: parseCurrency(getVal(row, ['Valor bruto'])),
-      sourceFile: fileName,
-      category: 'taxable',
-    }));
+    .map((row, index) => {
+      const description = getVal(row, ['Descrição']) || '';
+      return {
+        id: `${fileName}-pagbank-${index}`,
+        date: normalizeDate(getVal(row, ['Data da transação'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['Valor bruto'])),
+        sourceFile: fileName,
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
+      };
+    });
 };
 
-const parsePagSeguro = (content: string, fileName: string): Transaction[] => {
+const parsePagSeguro = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   const results = Papa.parse(content, { header: true, skipEmptyLines: true });
   const data = results.data as any[];
   
@@ -469,14 +448,17 @@ const parsePagSeguro = (content: string, fileName: string): Transaction[] => {
 
   return data
     .filter(row => parseCurrency(getVal(row, ['VALOR'])) > 0)
-    .map((row, index) => ({
-      id: `${fileName}-pagseguro-${index}`,
-      date: normalizeDate(getVal(row, ['DATA'])),
-      description: getVal(row, ['DESCRICAO']) || '',
-      amount: parseCurrency(getVal(row, ['VALOR'])),
-      sourceFile: fileName,
-      category: 'taxable',
-    }));
+    .map((row, index) => {
+      const description = getVal(row, ['DESCRICAO']) || '';
+      return {
+        id: `${fileName}-pagseguro-${index}`,
+        date: normalizeDate(getVal(row, ['DATA'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['VALOR'])),
+        sourceFile: fileName,
+        category: isNonTaxable(description, undefined, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
+      };
+    });
 };
 
 // --- FUNÇÃO PRINCIPAL ---
@@ -499,8 +481,11 @@ const parsers = [
   { name: 'PagSeguro', fn: parsePagSeguro },
 ];
 
-export const parseFiles = async (files: File[], companyCnpj: string, partnerCpf: string): Promise<Transaction[]> => {
+export const parseFiles = async (files: File[], companyCnpj: string, partnerCpf: string, partnerNames: string): Promise<Transaction[]> => {
   const allTransactions: Transaction[] = [];
+  const cleanCompanyCnpj = companyCnpj.replace(/\D/g, '');
+  const cpfList = partnerCpf.split(',').map(cpf => cpf.trim().replace(/\D/g, '')).filter(Boolean);
+  const nameList = partnerNames.split(',').map(name => normalizeString(name)).filter(Boolean);
 
   for (const file of files) {
     try {
@@ -509,7 +494,7 @@ export const parseFiles = async (files: File[], companyCnpj: string, partnerCpf:
       
       if (file.name.toLowerCase().endsWith('.ofx')) {
         console.log(`[Parser] Arquivo identificado como OFX. Usando parser de OFX.`);
-        const txs = await parseOfxFile(content, file.name, companyCnpj, partnerCpf);
+        const txs = await parseOfxFile(content, file.name, cleanCompanyCnpj, cpfList, nameList);
         allTransactions.push(...txs);
         continue;
       }
@@ -517,8 +502,7 @@ export const parseFiles = async (files: File[], companyCnpj: string, partnerCpf:
       let foundParser = false;
       for (const parser of parsers) {
         console.log(`[Parser] Tentando o parser: ${parser.name}`);
-        // @ts-ignore
-        const transactions = parser.fn(content, file.name, companyCnpj, partnerCpf);
+        const transactions = parser.fn(content, file.name, cleanCompanyCnpj, cpfList, nameList);
         if (transactions.length > 0) {
           console.log(`[Parser] SUCESSO! Parser '${parser.name}' encontrou ${transactions.length} transações.`);
           allTransactions.push(...transactions);
@@ -546,27 +530,16 @@ const readFileAsText = (file: File): Promise<string> => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const buffer = e.target?.result as ArrayBuffer;
-      console.log(`[readFileAsText] Arquivo ${file.name} lido, ${buffer.byteLength} bytes.`);
-      
-      // Tenta UTF-8 primeiro
       const utf8Decoder = new TextDecoder('utf-8');
       let content = utf8Decoder.decode(buffer);
-      console.log(`[readFileAsText] Tentativa de decodificação UTF-8 (primeiras 300 chars): ${content.substring(0, 300)}`);
       
-      // Heurística para detectar encoding incorreto, especialmente para arquivos do BB
       const hasGarbledChars = content.includes('Lan�amento') || content.includes('N� documento');
-      console.log(`[readFileAsText] Verificando caracteres problemáticos (�): ${hasGarbledChars}`);
-
       if (hasGarbledChars || content.includes('\uFFFD')) {
-        console.log(`[readFileAsText] Detectado problema de encoding. Tentando com windows-1252.`);
         const isoDecoder = new TextDecoder('windows-1252');
         content = isoDecoder.decode(buffer);
-        console.log(`[readFileAsText] Resultado com windows-1252 (primeiras 300 chars): ${content.substring(0, 300)}`);
       }
       
-      // Remove BOM se existir
       if (content.charCodeAt(0) === 0xFEFF) {
-        console.log(`[readFileAsText] Byte Order Mark (BOM) encontrado e removido.`);
         content = content.substring(1);
       }
       
