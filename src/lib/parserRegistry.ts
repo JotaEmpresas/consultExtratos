@@ -16,7 +16,7 @@ export const bankOptions = [
   // Futuros bancos serão adicionados aqui
 ];
 
-export const parsers: { [key: string]: (fileContent: string) => Promise<Transaction[]> } = {
+export const parsers: { [key: string]: (fileContent: string, companyCnpj: string, cpfList: string[], nameList: string[]) => Promise<Transaction[]> } = {
   'banco-da-amazonia': parseBancoDaAmazonia,
   'banco-do-brasil': parseBancoDoBrasil,
   'nubank': parseNubank,

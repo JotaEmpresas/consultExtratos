@@ -40,12 +40,15 @@ const Index = () => {
       const filesContent = await readFilesForWebhook(files);
       if (filesContent.length === 0) throw new Error("Nenhum arquivo pôde ser lido.");
 
+      const cpfList = data.cpf.split(',').map(s => s.trim()).filter(Boolean);
+      const nameList = data.partnerNames.split(',').map(s => s.trim()).filter(Boolean);
+
       let allTransactions: Transaction[] = [];
       for (const file of filesContent) {
         try {
-          const parsedTransactions = await parser(file.content);
+          const parsedTransactions = await parser(file.content, data.cnpj, cpfList, nameList);
           // Add source file info to each transaction
-          const transactionsWithSource = parsedTransactions.map(t => ({ ...t, sourceFile: file.fileName }));
+          const transactionsWithSource = parsedTransactions.map((t, i) => ({ ...t, id: t.id || `${file.fileName}-${i}`, sourceFile: file.fileName }));
           allTransactions.push(...transactionsWithSource);
         } catch (error) {
           showError(`Erro ao processar o arquivo ${file.fileName}: ${error instanceof Error ? error.message : "Erro desconhecido"}`);
@@ -56,19 +59,9 @@ const Index = () => {
         throw new Error("Nenhuma transação de crédito válida foi encontrada nos arquivos. Verifique o formato e o conteúdo.");
       }
       
-      // For now, we will just display the parsed transactions without sending to AI
-      // This allows verifying the parser logic first.
-      // The AI integration can be re-enabled later.
-      
-      const taxable = allTransactions.map((t, i) => ({
-        ...t,
-        id: t.id || `tax-${i}`,
-        category: 'taxable' as const,
-      }));
-
-      setTransactions(taxable);
+      setTransactions(allTransactions);
       setAnalysisData(data);
-      setAiAnalysisText("Análise local concluída. Os dados abaixo foram extraídos dos arquivos.");
+      setAiAnalysisText("Análise local concluída. Os dados abaixo foram extraídos e classificados automaticamente.");
       
       setStep('result');
       dismissToast(toastId);

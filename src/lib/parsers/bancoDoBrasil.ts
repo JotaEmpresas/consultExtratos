@@ -12,7 +12,12 @@ const parseCurrency = (value: string | undefined): number => {
   return parseFloat(cleanedValue) || 0;
 };
 
-export const parseBancoDoBrasil = (fileContent: string): Promise<Transaction[]> => {
+export const parseBancoDoBrasil = (
+  fileContent: string,
+  companyCnpj: string,
+  cpfList: string[],
+  nameList: string[]
+): Promise<Transaction[]> => {
   return new Promise((resolve, reject) => {
     Papa.parse(fileContent, {
       header: true,
@@ -45,12 +50,24 @@ export const parseBancoDoBrasil = (fileContent: string): Promise<Transaction[]> 
 
               const description = detalhes ? `${lancamento}: ${detalhes}` : lancamento;
               
+              const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+              const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
+
+              const cleanedCnpj = companyCnpj.replace(/\D/g, '');
+              const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
+              const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
+
+              const isOwnAccount = 
+                (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
+                cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
+                cleanedNameList.some(name => name && normalizedDesc.includes(name));
+
               const transaction: Transaction = {
                 id: `bb-${Date.now()}-${index}`,
                 date: row[dataHeader]?.trim() || '',
                 description: description || 'Descrição não informada',
                 amount: amount,
-                category: 'taxable',
+                category: isOwnAccount ? 'non-taxable' : 'taxable',
               };
               
               if (transaction.date) {

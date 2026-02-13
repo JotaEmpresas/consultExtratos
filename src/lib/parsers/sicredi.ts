@@ -8,7 +8,12 @@ const parseCurrency = (value: string | undefined): number => {
   return parseFloat(cleanedValue) || 0;
 };
 
-export const parseSicredi = (fileContent: string): Promise<Transaction[]> => {
+export const parseSicredi = (
+  fileContent: string,
+  companyCnpj: string,
+  cpfList: string[],
+  nameList: string[]
+): Promise<Transaction[]> => {
   return new Promise((resolve, reject) => {
     const transactions: Transaction[] = [];
     const lines = fileContent.split('\n');
@@ -42,12 +47,24 @@ export const parseSicredi = (fileContent: string): Promise<Transaction[]> => {
 
         // Consideramos apenas as entradas (valores positivos)
         if (amount > 0) {
+          const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
+
+          const cleanedCnpj = companyCnpj.replace(/\D/g, '');
+          const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
+          const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
+
+          const isOwnAccount = 
+            (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
+            cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
+            cleanedNameList.some(name => name && normalizedDesc.includes(name));
+
           const transaction: Transaction = {
             id: `sicredi-${Date.now()}-${Math.random()}`,
             date: date.trim(),
             description: description.trim(),
             amount: amount,
-            category: 'taxable', // Categoria padrão
+            category: isOwnAccount ? 'non-taxable' : 'taxable',
           };
           transactions.push(transaction);
         }

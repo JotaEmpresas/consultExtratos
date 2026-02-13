@@ -9,7 +9,12 @@ const parseCurrency = (value: string | undefined): number => {
   return parseFloat(cleanedValue) || 0;
 };
 
-export const parseBancoDaAmazonia = (fileContent: string): Promise<Transaction[]> => {
+export const parseBancoDaAmazonia = (
+  fileContent: string,
+  companyCnpj: string,
+  cpfList: string[],
+  nameList: string[]
+): Promise<Transaction[]> => {
   return new Promise((resolve, reject) => {
     // First, find the actual header row, as the file has junk at the top.
     const lines = fileContent.split('\n');
@@ -37,12 +42,26 @@ export const parseBancoDaAmazonia = (fileContent: string): Promise<Transaction[]
 
           // We are only interested in credit entries
           if (dc === 'C' && amount > 0) {
+            const description = row['DESCRICAO_HISTORICO']?.trim() || 'Descrição não informada';
+
+            const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
+
+            const cleanedCnpj = companyCnpj.replace(/\D/g, '');
+            const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
+            const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
+
+            const isOwnAccount = 
+              (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
+              cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
+              cleanedNameList.some(name => name && normalizedDesc.includes(name));
+
             const transaction: Transaction = {
               id: `bda-${Date.now()}-${index}`,
               date: row['DATA']?.trim() || '',
-              description: row['DESCRICAO_HISTORICO']?.trim() || 'Descrição não informada',
+              description: description,
               amount: amount,
-              category: 'taxable', // Default category
+              category: isOwnAccount ? 'non-taxable' : 'taxable',
             };
             
             // Basic validation
