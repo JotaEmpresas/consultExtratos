@@ -14,6 +14,7 @@ import { parsePagBank } from './parsers/pagbank';
 import { parseCora } from './parsers/cora';
 import { parseInter } from './parsers/inter';
 import { parseSantander2 } from './parsers/santander2';
+import { parseInfinitPay2 } from './parsers/infinitPay2';
 
 export const bankOptions = [
   { value: 'banco-da-amazonia', label: 'Banco da Amazônia' },
@@ -22,6 +23,7 @@ export const bankOptions = [
   { value: 'c6-bank', label: 'C6 Bank' },
   { value: 'cora', label: 'Cora' },
   { value: 'infinitpay', label: 'InfinitPay' },
+  { value: 'infinitpay-2', label: 'InfinitPay (Formato 2)' },
   { value: 'inter', label: 'Inter' },
   { value: 'itau', label: 'Itaú' },
   { value: 'mercado-pago', label: 'Mercado Pago' },
@@ -41,6 +43,7 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'c6-bank': parseC6Bank,
   'cora': parseCora,
   'infinitpay': parseInfinitPay,
+  'infinitpay-2': parseInfinitPay2,
   'inter': parseInter,
   'itau': parseItau,
   'mercado-pago': parseMercadoPago,
