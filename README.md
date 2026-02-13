@@ -1,19 +1,19 @@
 # Welcome to your Dyad app
 //
-Itaú
+Itaú -ok
 itaú 2
-C6 Bank
-Mercado Pago
-Cora
-Banco do Brasil
-PagBank
-Inter
-PagSeguro
+C6 Bank ok
+Mercado Pago ok
+Cora ok
+Banco do Brasil ok
+PagBank ok
+Inter ok
+PagSeguro ok
 Nunbank -ok
-bradesco
+bradesco ok
 banco do brasil 2
 Estone- ok
 stone 2
-infinit pay
+infinit pay okinfinit pau 2 ok
 Santander - ok
 Banco da Amazonia - ok
