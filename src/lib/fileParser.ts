@@ -101,6 +101,43 @@ const isNonTaxable = (
 
 // --- PARSERS ESPECÍFICOS ---
 
+const parseAmazonia = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
+  console.log(`[parseAmazonia] Iniciando parser para ${fileName}`);
+  const lines = content.split(/\r?\n/);
+  
+  const headerIndex = findHeaderLineIndex(lines, ['DATA', 'DESCRICAO_HISTORICO', 'VALOR', 'DC']);
+  
+  if (headerIndex === -1) {
+    console.error(`[parseAmazonia] Cabeçalho não encontrado em ${fileName}.`);
+    return [];
+  }
+
+  const cleanContent = lines.slice(headerIndex).join('\n');
+  const results = Papa.parse(cleanContent, { header: true, skipEmptyLines: true });
+  const data = results.data as any[];
+  console.log(`[parseAmazonia] PapaParse encontrou ${data.length} linhas.`);
+
+  return data
+    .filter(row => {
+      const dc = getVal(row, ['DC']);
+      const valor = parseCurrency(getVal(row, ['VALOR']));
+      return dc === 'C' && valor > 0;
+    })
+    .map((row, index) => {
+      const description = getVal(row, ['DESCRICAO_HISTORICO']) || '';
+      const documentInfo = getVal(row, ['CPF_CNPJ']) || '';
+
+      return {
+        id: `${fileName}-amazonia-${index}`,
+        date: normalizeDate(getVal(row, ['DATA'])),
+        description: description,
+        amount: parseCurrency(getVal(row, ['VALOR'])),
+        sourceFile: fileName,
+        category: isNonTaxable(description, documentInfo, companyCnpj, cpfList, nameList) ? 'non-taxable' : 'taxable',
+      };
+    });
+};
+
 const parseInfinitPay = (content: string, fileName: string, companyCnpj: string, cpfList: string[], nameList: string[]): Transaction[] => {
   console.log(`[parseInfinitPay] Iniciando parser para ${fileName}`);
   const lines = content.split(/\r?\n/);
@@ -469,6 +506,7 @@ const parsePagSeguro = (content: string, fileName: string, companyCnpj: string, 
 // --- FUNÇÃO PRINCIPAL ---
 
 const parsers = [
+  { name: 'Banco da Amazônia', fn: parseAmazonia },
   { name: 'InfinitPay', fn: parseInfinitPay },
   { name: 'Stone 2', fn: parseStone2 },
   { name: 'Stone', fn: parseStone },

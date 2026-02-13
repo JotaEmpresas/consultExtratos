@@ -11,6 +11,10 @@ import { List, FileText } from "lucide-react";
 
 const formats = [
   {
+    name: "Banco da Amazônia",
+    fields: ["DATA", "DESCRICAO_HISTORICO", "VALOR", "DC"],
+  },
+  {
     name: "Nubank (.csv)",
     fields: ["Data", "Valor", "Identificador", "Descrição"],
   },
