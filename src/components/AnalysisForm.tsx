@@ -8,15 +8,15 @@ import { Button } from "@/components/ui/button";
 import { FileUpload } from "@/components/FileUpload";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AnalysisData } from '@/types';
-import { SupportedFormats } from './SupportedFormats';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { bankOptions } from '@/lib/parserRegistry';
 
 interface AnalysisFormProps {
-  onSubmit: (data: AnalysisData, files: File[], environment: 'prod' | 'test') => void;
+  onSubmit: (data: AnalysisData, files: File[]) => void;
   isProcessing: boolean;
 }
 
@@ -27,7 +27,7 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
   const [totalInvoices, setTotalInvoices] = useState('');
   const [competenceDate, setCompetenceDate] = useState<Date | undefined>(new Date());
   const [files, setFiles] = useState<File[]>([]);
-  const [environment, setEnvironment] = useState<'prod' | 'test'>('prod');
+  const [bank, setBank] = useState<string>('');
 
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '');
@@ -51,7 +51,7 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
     setTotalInvoices(numericValue);
   };
 
-  const isFormValid = cnpj.length === 18 && files.length > 0 && competenceDate && !isProcessing;
+  const isFormValid = cnpj.length === 18 && files.length > 0 && competenceDate && bank && !isProcessing;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,14 +63,15 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
       partnerNames,
       totalInvoices: totalInvoices || '0',
       competenceDate,
-    }, files, environment);
+      bank,
+    }, files);
   };
 
   return (
     <Card className="w-full max-w-3xl mx-auto shadow-lg border-indigo-100 dark:border-indigo-900 bg-white dark:bg-gray-950">
       <CardHeader>
         <CardTitle className="text-xl font-semibold">Informações da Análise</CardTitle>
-        <CardDescription>Preencha os dados e importe os extratos para iniciar.</CardDescription>
+        <CardDescription>Preencha os dados, selecione o banco e importe os extratos para iniciar.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -118,25 +119,22 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
           </div>
           
           <div className="space-y-2">
-            <Label>Extratos Bancários (.csv)</Label>
-            <FileUpload files={files} setFiles={setFiles} />
+            <Label>Banco</Label>
+            <Select onValueChange={setBank} value={bank}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o banco do extrato" />
+              </SelectTrigger>
+              <SelectContent>
+                {bankOptions.map(option => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="space-y-3 rounded-lg border p-4">
-            <Label className="font-semibold">Ambiente de Envio</Label>
-            <RadioGroup defaultValue="prod" value={environment} onValueChange={(value: 'prod' | 'test') => setEnvironment(value)} className="flex items-center space-x-4 pt-2">
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="prod" id="r-prod" />
-                <Label htmlFor="r-prod" className="cursor-pointer">Produção</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="test" id="r-test" />
-                <Label htmlFor="r-test" className="cursor-pointer">Teste</Label>
-              </div>
-            </RadioGroup>
-            <p className="text-xs text-muted-foreground">
-              Use <strong>Produção</strong> se o workflow estiver ativo. Use <strong>Teste</strong> se estiver usando a função "Listen for test event" no n8n.
-            </p>
+          <div className="space-y-2">
+            <Label>Extratos Bancários (.csv, .ofx)</Label>
+            <FileUpload files={files} setFiles={setFiles} />
           </div>
 
           <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3" disabled={!isFormValid}>
@@ -150,7 +148,6 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
             )}
           </Button>
         </form>
-        <SupportedFormats />
       </CardContent>
     </Card>
   );
