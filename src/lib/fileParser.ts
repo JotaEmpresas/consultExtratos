@@ -574,43 +574,41 @@ const readFileAsText = (file: File): Promise<string> => {
     reader.onload = (e) => {
       try {
         const buffer = e.target?.result as ArrayBuffer;
+        if (!buffer) {
+          return reject(new Error("Failed to read file buffer."));
+        }
         const view = new Uint8Array(buffer);
-
         let content: string;
 
-        // Check for UTF-16 LE BOM (FF FE)
+        // Check for UTF-16 LE BOM (FF FE) - for Banco da Amazônia file
         if (view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) {
           content = new TextDecoder('utf-16le').decode(buffer);
-        } 
-        // Check for UTF-8 BOM (EF BB BF)
-        else if (view.length >= 3 && view[0] === 0xEF && view[1] === 0xBB && view[2] === 0xBF) {
-          content = new TextDecoder('utf-8').decode(buffer);
-        } 
-        else {
-          // No BOM, try UTF-8 first
-          const utf8Content = new TextDecoder('utf-8').decode(buffer);
-          // If it contains replacement characters (like �), it's likely not UTF-8. Try a common fallback.
-          if (utf8Content.includes('\uFFFD')) {
-            console.log("Decodificação UTF-8 falhou, tentando windows-1252.");
-            content = new TextDecoder('windows-1252').decode(buffer);
-          } else {
-            content = utf8Content;
+        } else {
+          // Original logic that worked for other files
+          const utf8Decoder = new TextDecoder('utf-8');
+          content = utf8Decoder.decode(buffer);
+          
+          // Fallback for files that are not UTF-8
+          if (content.includes('\uFFFD')) {
+            console.log("UTF-8 decoding resulted in replacement characters, trying windows-1252.");
+            const isoDecoder = new TextDecoder('windows-1252');
+            content = isoDecoder.decode(buffer);
           }
         }
-
-        // The BOM character might still be present at the start of the string after decoding
+        
+        // Remove BOM character if it's still there after decoding
         if (content.charCodeAt(0) === 0xFEFF) {
           content = content.substring(1);
         }
         
         resolve(content);
       } catch (error) {
-        console.error("Erro ao decodificar o arquivo:", error);
+        console.error("Error decoding file:", error);
         reject(error);
       }
     };
     reader.onerror = (e) => {
-      console.error("Erro ao ler o arquivo:", e);
+      console.error("Error reading file:", e);
       reject(e);
     };
     reader.readAsArrayBuffer(file);
