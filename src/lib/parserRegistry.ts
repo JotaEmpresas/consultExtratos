@@ -8,6 +8,7 @@ import { parseBancoDoBrasil } from './parsers/bancoDoBrasil';
 import { parseInfinitPay } from './parsers/infinitPay';
 import { parseItau } from './parsers/itau';
 import { parseBradesco } from './parsers/bradesco';
+import { parseMercadoPago } from './parsers/mercadoPago';
 
 export const bankOptions = [
   { value: 'banco-da-amazonia', label: 'Banco da Amazônia' },
@@ -15,6 +16,7 @@ export const bankOptions = [
   { value: 'bradesco', label: 'Bradesco' },
   { value: 'infinitpay', label: 'InfinitPay' },
   { value: 'itau', label: 'Itaú' },
+  { value: 'mercado-pago', label: 'Mercado Pago' },
   { value: 'nubank', label: 'Nubank' },
   { value: 'santander', label: 'Santander' },
   { value: 'sicredi', label: 'Sicredi' },
@@ -28,6 +30,7 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'bradesco': parseBradesco,
   'infinitpay': parseInfinitPay,
   'itau': parseItau,
+  'mercado-pago': parseMercadoPago,
   'nubank': parseNubank,
   'santander': parseSantander,
   'sicredi': parseSicredi,
