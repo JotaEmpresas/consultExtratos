@@ -105,7 +105,10 @@ export const AIComparisonReport = ({ originalTransactions, aiResult, analysisDat
           <CardTitle className="flex items-center gap-2"><BookOpen /> Base de Conhecimento da IA</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{aiResult["legislação bse de conhecimento"]}</p>
+          {/* Handles both old typo key and new corrected key if backend is inconsistent */}
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+            {aiResult["legislação base de conhecimento"] || (aiResult as any)["legislação bse de conhecimento"]}
+          </p>
         </CardContent>
       </Card>
     </div>

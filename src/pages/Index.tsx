@@ -6,6 +6,8 @@ import { readFilesForWebhook } from "@/lib/fileParser";
 import { showError, showSuccess, showLoading, dismissToast } from "@/utils/toast";
 import { Transaction, AnalysisData, AiProcessingResponse } from "@/types";
 import { SettingsSheet } from "@/components/SettingsSheet";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 type AnalysisStep = 'input' | 'result';
 
@@ -15,12 +17,14 @@ const Index = () => {
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiAnalysisText, setAiAnalysisText] = useState<string>("");
+  const [corsError, setCorsError] = useState(false);
 
   const getWebhookUrl = () => {
      return localStorage.getItem('prodWebhookUrl') || 'https://jota-empresas-n8n.ubjifz.easypanel.host/webhook/bd95e5ce-4ebf-48c9-b823-ad8b57429c7e';
   };
 
   const handleProcessAnalysis = async (data: AnalysisData, files: File[]) => {
+    setCorsError(false);
     const webhookUrl = getWebhookUrl();
     
     if (!webhookUrl) {
@@ -105,7 +109,8 @@ const Index = () => {
       } catch (fetchError) {
         // Tratamento específico para erro de rede/CORS
         if (fetchError instanceof TypeError && fetchError.message.includes("Failed to fetch")) {
-          throw new Error("Erro de conexão (CORS). No seu n8n (Webhook), vá em Options > Allowed Origins (CORS) e coloque '*'.");
+          setCorsError(true);
+          throw new Error("Erro de conexão (CORS). O navegador bloqueou a solicitação. Verifique o alerta na tela.");
         }
         throw fetchError;
       }
@@ -134,6 +139,7 @@ const Index = () => {
     setTransactions([]);
     setAnalysisData(null);
     setAiAnalysisText("");
+    setCorsError(false);
   };
 
   const handleReanalyzeAi = async (type: 'prod' | 'test') => {
@@ -156,6 +162,24 @@ const Index = () => {
               <p className="font-semibold mb-1">Processamento via IA Ativo</p>
               Os extratos serão enviados para o seu n8n. Certifique-se de que o Webhook permite conexões externas (CORS configurado com <code>*</code>).
             </div>
+            
+            {corsError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Erro de Configuração (CORS)</AlertTitle>
+                <AlertDescription className="mt-2">
+                  <p className="mb-2">O navegador bloqueou a conexão com o n8n. Isso ocorre por segurança quando o servidor não permite explicitamente a origem.</p>
+                  <p className="font-semibold">Como resolver:</p>
+                  <ol className="list-decimal list-inside ml-2">
+                    <li>No seu workflow n8n, abra o nó <strong>Webhook</strong>.</li>
+                    <li>Vá em <strong>Options</strong>.</li>
+                    <li>Encontre a opção <strong>Allowed Origins (CORS)</strong>.</li>
+                    <li>Defina o valor como <code>*</code>.</li>
+                  </ol>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <AnalysisForm onSubmit={handleProcessAnalysis} isProcessing={isProcessing} />
           </div>
         )}

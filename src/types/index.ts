@@ -1,3 +1,4 @@
+base">
 export type TransactionCategory = 'taxable' | 'non-taxable';
 
 export interface Transaction {
@@ -28,5 +29,5 @@ export interface AiAnalysisResult {
   analise: string;
   "lista de Valores Tributados": Transaction[];
   "Lista de Valores Possíveis não Tributáveis": Transaction[];
-  "legislação bse de conhecimento": string;
+  "legislação base de conhecimento": string;
 }
