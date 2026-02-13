@@ -21,26 +21,26 @@ export const parseBradesco = (
       complete: (results) => {
         const transactions: Transaction[] = [];
         
-        results.data.forEach((row: string[], index: number) => {
+        results.data.forEach((row: any, index: number) => {
           // O CSV do Bradesco pode ter linhas de cabeçalho/rodapé. Uma linha de transação válida começa com uma data.
-          const dateStr = row[0]?.trim();
-          if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+          const dateStr = Array.isArray(row) ? row[0]?.trim() : undefined;
+          if (!dateStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
             return; // Ignora a linha se a primeira coluna não for uma data no formato DD/MM/YYYY
           }
 
           // Índices das colunas: 0:Data, 1:Lançamento, 3:Crédito
-          const creditStr = row[3];
+          const creditStr = Array.isArray(row) ? row[3] : undefined;
           const amount = parseCurrency(creditStr);
 
           // Processa apenas transações de crédito (valores positivos)
           if (amount > 0) {
-            const description = row[1]?.trim() || 'Descrição não informada';
+            const description = (Array.isArray(row) ? row[1]?.trim() : '') || 'Descrição não informada';
 
             const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
 
             const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-            const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '').filter(Boolean));
+            const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
             const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
 
             const isOwnAccount = 
