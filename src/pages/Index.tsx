@@ -78,11 +78,16 @@ const Index = () => {
           throw new Error(`Erro no servidor da IA: ${response.status} ${response.statusText}`);
         }
 
-        const result: AiProcessingResponse = await response.json();
-        console.log("Resposta da IA recebida:", result);
+        const responseData: AiProcessingResponse[] | AiProcessingResponse = await response.json();
+        
+        // n8n usualmente retorna um array, então pegamos o primeiro elemento.
+        // Isso também lida com casos onde um objeto único é retornado.
+        const result = Array.isArray(responseData) ? responseData[0] : responseData;
+        
+        console.log("Resposta da IA recebida e processada:", result);
 
-        if (!result.transacoesTributaveis && !result.transacoesNaoTributaveis) {
-          throw new Error("A IA respondeu, mas não retornou as listas de transações esperadas. Verifique o formato de saída no n8n.");
+        if (!result || (!result.transacoesTributaveis && !result.transacoesNaoTributaveis)) {
+          throw new Error("A IA respondeu, mas o formato dos dados é inválido ou está vazio. Verifique a saída do n8n.");
         }
 
         const taxable = (result.transacoesTributaveis || []).map((t, i) => ({
