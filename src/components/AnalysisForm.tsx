@@ -49,7 +49,7 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
     setTotalInvoices(numericValue);
   };
 
-  const isFormValid = cnpj.length === 18 && cpf.length > 0 && files.length > 0 && competenceDate && !isProcessing;
+  const isFormValid = cnpj.length === 18 && files.length > 0 && competenceDate && !isProcessing;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,7 +79,7 @@ export const AnalysisForm = ({ onSubmit, isProcessing }: AnalysisFormProps) => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="cpf">CPFs dos Sócios (separado por vírgula)</Label>
-              <Input id="cpf" placeholder="000.000.000-00, 111.111.111-11" value={cpf} onChange={handleCpfChange} required />
+              <Input id="cpf" placeholder="000.000.000-00, 111.111.111-11" value={cpf} onChange={handleCpfChange} />
             </div>
           </div>
           <div className="space-y-2">
