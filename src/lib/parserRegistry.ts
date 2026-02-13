@@ -4,20 +4,23 @@ import { parseStone } from './parsers/stone';
 import { parseNubank } from './parsers/nubank';
 import { parseSicredi } from './parsers/sicredi';
 import { parseSantander } from './parsers/santander';
+import { parseBancoDoBrasil } from './parsers/bancoDoBrasil';
 
 export const bankOptions = [
   { value: 'banco-da-amazonia', label: 'Banco da Amazônia' },
-  { value: 'stone', label: 'Stone' },
+  { value: 'banco-do-brasil', label: 'Banco do Brasil' },
   { value: 'nubank', label: 'Nubank' },
-  { value: 'sicredi', label: 'Sicredi' },
   { value: 'santander', label: 'Santander' },
+  { value: 'sicredi', label: 'Sicredi' },
+  { value: 'stone', label: 'Stone' },
   // Futuros bancos serão adicionados aqui
 ];
 
 export const parsers: { [key: string]: (fileContent: string) => Promise<Transaction[]> } = {
   'banco-da-amazonia': parseBancoDaAmazonia,
-  'stone': parseStone,
+  'banco-do-brasil': parseBancoDoBrasil,
   'nubank': parseNubank,
-  'sicredi': parseSicredi,
   'santander': parseSantander,
+  'sicredi': parseSicredi,
+  'stone': parseStone,
 };
