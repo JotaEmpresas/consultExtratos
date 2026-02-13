@@ -75,20 +75,25 @@ const findHeaderLineIndex = (lines: string[], keywords: string[]): number => {
 const isNonTaxable = (
   description: string,
   document: string | undefined,
-  companyCnpj: string,
-  cpfList: string[],
-  nameList: string[]
+  companyCnpj: string, // cleaned: "12345678000199"
+  cpfList: string[],   // cleaned: ["11122233344"]
+  nameList: string[]   // normalized: ["fulano de tal"]
 ): boolean => {
   const normalizedDesc = normalizeString(description);
   const cleanDocument = document?.replace(/\D/g, '') || '';
 
+  // 1. Compara números de documento (limpo vs limpo)
   if (cleanDocument) {
     if (cleanDocument === companyCnpj) return true;
     if (cpfList.includes(cleanDocument)) return true;
   }
 
-  if (companyCnpj && normalizedDesc.includes(companyCnpj)) return true;
-  if (cpfList.some(cpf => cpf && normalizedDesc.includes(cpf))) return true;
+  // 2. Para busca na descrição, removemos formatação para comparar apenas os números
+  const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
+  if (companyCnpj && numbersOnlyDesc.includes(companyCnpj)) return true;
+  if (cpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf))) return true;
+  
+  // 3. Busca por nome permanece a mesma (normalizado vs normalizado)
   if (nameList.some(name => name && normalizedDesc.includes(name))) return true;
   
   return false;

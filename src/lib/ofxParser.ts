@@ -33,10 +33,11 @@ export const parseOfxFile = async (
       .map((t, index) => {
         const description = t.MEMO || '';
         const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
 
         const isOwnAccount = 
-          (companyCnpj && normalizedDesc.includes(companyCnpj)) ||
-          cpfList.some(cpf => cpf && normalizedDesc.includes(cpf)) ||
+          (companyCnpj && numbersOnlyDesc.includes(companyCnpj)) ||
+          cpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
           nameList.some(name => name && normalizedDesc.includes(name));
 
         return {
