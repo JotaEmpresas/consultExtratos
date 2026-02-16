@@ -1,15 +1,25 @@
 import { Transaction } from '@/types';
 import Papa from 'papaparse';
 
-// Helper para converter moeda no formato "1.234,56"
+// Helper para converter moeda no formato "+R$ 23,05"
 const parseCurrency = (value: string | undefined): number => {
   if (!value) return 0;
   const cleanedValue = value
-    .replace(/\./g, '')      // remove separadores de milhar
-    .replace(',', '.')      // troca a vírgula decimal por ponto
+    .replace(/[+R$\s"]/g, '') // remove +, R$, espaços e aspas
+    .replace(/\./g, '')       // remove separadores de milhar
+    .replace(',', '.')       // troca a vírgula decimal por ponto
     .trim();
   return parseFloat(cleanedValue) || 0;
 };
+
+// Helper para formatar data de YYYY-MM-DD para DD/MM/YYYY
+const formatDate = (dateStr: string | undefined): string => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const [year, month, day] = parts;
+    return `${day}/${month}/${year}`;
+}
 
 export const parseInfinitPay3 = (
   fileContent: string,
@@ -22,43 +32,52 @@ export const parseInfinitPay3 = (
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
+        if (results.errors.length > 0) {
+            console.error("Erros no parse do InfinitPay (Formato 3):", results.errors);
+        }
         const transactions: Transaction[] = [];
         
-        // Os cabeçalhos podem variar, então tentamos encontrá-los de forma flexível
-        const headers = results.meta.fields || [];
-        const dateHeader = headers.find(h => h.toLowerCase().includes('data')) || 'Data';
-        const descriptionHeader = headers.find(h => h.toLowerCase().includes('descri') || h.toLowerCase().includes('hist')) || 'Descrição';
-        const valueHeader = headers.find(h => h.toLowerCase().includes('valor') || h.toLowerCase().includes('crédito')) || 'Valor';
-
         results.data.forEach((row: any, index: number) => {
-          const amount = parseCurrency(row[valueHeader]);
+          const valorStr = row['Valor']?.trim();
 
-          // Processar apenas transações de crédito (valores positivos)
-          if (amount > 0) {
-            const description = row[descriptionHeader]?.trim() || 'Descrição não informada';
-            
-            const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
+          // Processar apenas transações de crédito (que começam com '+')
+          if (valorStr && valorStr.startsWith('+')) {
+            const amount = parseCurrency(valorStr);
 
-            const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-            const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-            const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
+            if (amount > 0) {
+              const tipo = row['Tipo de transação']?.trim() || '';
+              const nome = row['Nome']?.trim() || '';
+              const detalhe = row['Detalhe']?.trim() || '';
+              
+              let description = tipo;
+              if (nome) description += `: ${nome}`;
+              if (detalhe) description += ` (${detalhe})`;
+              if (!description) description = 'Descrição não informada';
 
-            const isOwnAccount = 
-              (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
-              cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-              cleanedNameList.some(name => name && normalizedDesc.includes(name));
+              const fullTextForCheck = `${description}`.toLowerCase();
+              const normalizedDesc = fullTextForCheck.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+              const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
 
-            const transaction: Transaction = {
-              id: `infinitpay3-${Date.now()}-${index}`,
-              date: row[dateHeader]?.trim() || '',
-              description: description,
-              amount: amount,
-              category: isOwnAccount ? 'non-taxable' : 'taxable',
-            };
-            
-            if (transaction.date) {
-              transactions.push(transaction);
+              const cleanedCnpj = companyCnpj.replace(/\D/g, '');
+              const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
+              const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
+
+              const isOwnAccount = 
+                (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
+                cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
+                cleanedNameList.some(name => name && normalizedDesc.includes(name));
+
+              const transaction: Transaction = {
+                id: `infinitpay3-${Date.now()}-${index}`,
+                date: formatDate(row['Data']?.trim()),
+                description: description,
+                amount: amount,
+                category: isOwnAccount ? 'non-taxable' : 'taxable',
+              };
+              
+              if (transaction.date) {
+                transactions.push(transaction);
+              }
             }
           }
         });
