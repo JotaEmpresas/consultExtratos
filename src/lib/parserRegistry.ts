@@ -15,6 +15,7 @@ import { parseCora } from './parsers/cora';
 import { parseInter } from './parsers/inter';
 import { parseSantander2 } from './parsers/santander2';
 import { parseInfinitPay2 } from './parsers/infinitPay2';
+import { parseInfinitPay3 } from './parsers/infinitPay3';
 
 export const bankOptions = [
   { value: 'banco-da-amazonia', label: 'Banco da Amazônia' },
@@ -24,6 +25,7 @@ export const bankOptions = [
   { value: 'cora', label: 'Cora' },
   { value: 'infinitpay', label: 'InfinitPay' },
   { value: 'infinitpay-2', label: 'InfinitPay (Formato 2)' },
+  { value: 'infinitpay-3', label: 'InfinitPay (Formato 3)' },
   { value: 'inter', label: 'Inter' },
   { value: 'itau', label: 'Itaú' },
   { value: 'mercado-pago', label: 'Mercado Pago' },
@@ -44,6 +46,7 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'cora': parseCora,
   'infinitpay': parseInfinitPay,
   'infinitpay-2': parseInfinitPay2,
+  'infinitpay-3': parseInfinitPay3,
   'inter': parseInter,
   'itau': parseItau,
   'mercado-pago': parseMercadoPago,
