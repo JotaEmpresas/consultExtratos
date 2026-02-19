@@ -14,6 +14,7 @@ import { parsePagBank } from './parsers/pagbank';
 import { parseCora } from './parsers/cora';
 import { parseInter } from './parsers/inter';
 import { parseSantander2 } from './parsers/santander2';
+import { parseSicoob } from './parsers/sicoob';
 import { parseInfinitPay2 } from './parsers/infinitPay2';
 import { parseInfinitPay3 } from './parsers/infinitPay3';
 
@@ -34,6 +35,7 @@ export const bankOptions = [
   { value: 'santander', label: 'Santander' },
   { value: 'santander-2', label: 'Santander (Formato 2)' },
   { value: 'sicredi', label: 'Sicredi' },
+  { value: 'sicoob', label: 'Sicoob' },
   { value: 'stone', label: 'Stone' },
   // Futuros bancos serão adicionados aqui
 ];
@@ -55,5 +57,6 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'santander': parseSantander,
   'santander-2': parseSantander2,
   'sicredi': parseSicredi,
+  'sicoob': parseSicoob,
   'stone': parseStone,
 };
