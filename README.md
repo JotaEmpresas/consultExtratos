@@ -18,3 +18,4 @@ infinit pay okinfinit pau 2 ok
 Santander - ok
 Banco da Amazonia - ok
 INFINITpaY3
+SICOOB
