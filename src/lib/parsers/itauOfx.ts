@@ -21,23 +21,34 @@ export const parseItauOfx = async (
   try {
     const ofxData = await parse(fileContent);
     const statement = ofxData.OFX.BANKMSGSRSV1?.STMTTRNRS?.STMTRS;
-    const transactions = statement?.BANKTRANLIST?.STMTTRN;
+    let transactions = statement?.BANKTRANLIST?.STMTTRN;
 
-    if (!transactions || !Array.isArray(transactions)) {
+    if (!transactions) {
+      console.warn("Nenhuma transação encontrada no arquivo OFX do Itaú.");
       return [];
     }
 
+    // Ensure transactions is an array, as ofx-js might return a single object
+    if (!Array.isArray(transactions)) {
+      transactions = [transactions];
+    }
+
+    const cleanedCnpj = companyCnpj.replace(/\D/g, '');
+    const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
+    const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
+
     return transactions
-      .filter(t => t.TRNTYPE === 'CREDIT' && parseFloat(t.TRNAMT) > 0)
+      // Filter for credit transactions (positive amount), which is more reliable than TRNTYPE
+      .filter(t => parseFloat(t.TRNAMT) > 0)
       .map((t, index) => {
         const description = t.MEMO || '';
         const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
 
         const isOwnAccount = 
-          (companyCnpj && numbersOnlyDesc.includes(companyCnpj)) ||
-          cpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-          nameList.some(name => name && normalizedDesc.includes(name));
+          (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
+          cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
+          cleanedNameList.some(name => name && normalizedDesc.includes(name));
 
         return {
           id: `itau-ofx-${t.FITID || index}`,
@@ -50,6 +61,6 @@ export const parseItauOfx = async (
       });
   } catch (error) {
     console.error(`Erro ao processar o arquivo OFX do Itaú:`, error);
-    return [];
+    throw new Error(`O arquivo OFX parece estar mal formatado ou não é um extrato bancário válido. Detalhes: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
   }
 };
