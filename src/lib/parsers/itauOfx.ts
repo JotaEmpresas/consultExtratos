@@ -1,4 +1,3 @@
-import { parse } from 'ofx-js';
 import { Transaction } from '@/types';
 
 // Helper to format OFX date (YYYYMMDD...) to DD/MM/YYYY
@@ -18,49 +17,74 @@ export const parseItauOfx = async (
   cpfList: string[],
   nameList: string[]
 ): Promise<Transaction[]> => {
-  try {
-    const ofxData = await parse(fileContent);
-    const statement = ofxData.OFX.BANKMSGSRSV1?.STMTTRNRS?.STMTRS;
-    let transactions = statement?.BANKTRANLIST?.STMTTRN;
+  return new Promise((resolve, reject) => {
+    try {
+      const transactions: Transaction[] = [];
+      
+      // Regex to find transaction blocks <STMTTRN>...</STMTTRN>
+      const transactionRegex = /<STMTTRN>(.*?)<\/STMTTRN>/gs;
+      
+      let match;
+      let index = 0;
 
-    if (!transactions) {
-      console.warn("Nenhuma transação encontrada no arquivo OFX do Itaú.");
-      return [];
-    }
+      while ((match = transactionRegex.exec(fileContent)) !== null) {
+        const block = match[1];
 
-    // Ensure transactions is an array, as ofx-js might return a single object
-    if (!Array.isArray(transactions)) {
-      transactions = [transactions];
-    }
+        // Extract amount
+        const amtMatch = /<TRNAMT>(.*?)(\r|\n|<)/.exec(block);
+        const amount = amtMatch ? parseFloat(amtMatch[1].trim()) : 0;
 
-    const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-    const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-    const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
+        // We are only interested in credit entries
+        if (amount <= 0) continue;
 
-    return transactions
-      // Filter for credit transactions (positive amount), which is more reliable than TRNTYPE
-      .filter(t => parseFloat(t.TRNAMT) > 0)
-      .map((t, index) => {
-        const description = t.MEMO || '';
+        // Extract other fields
+        const dateMatch = /<DTPOSTED>(.*?)(\r|\n|<)/.exec(block);
+        const dateRaw = dateMatch ? dateMatch[1].trim() : '';
+        const date = formatDate(dateRaw);
+
+        const memoMatch = /<MEMO>(.*?)(\r|\n|<)/.exec(block);
+        const description = memoMatch ? memoMatch[1].trim() : 'Descrição não informada';
+        
+        const fitidMatch = /<FITID>(.*?)(\r|\n|<)/.exec(block);
+        const fitid = fitidMatch ? fitidMatch[1].trim() : `itau-ofx-${Date.now()}-${index}`;
+
+        // Classification logic
         const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
+
+        const cleanedCnpj = companyCnpj.replace(/\D/g, '');
+        const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
+        const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
 
         const isOwnAccount = 
           (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
           cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
           cleanedNameList.some(name => name && normalizedDesc.includes(name));
 
-        return {
-          id: `itau-ofx-${t.FITID || index}`,
-          date: formatDate(t.DTPOSTED),
+        transactions.push({
+          id: fitid,
+          date: date,
           description: description,
-          amount: parseFloat(t.TRNAMT),
-          sourceFile: 'Itaú OFX',
+          amount: amount,
           category: isOwnAccount ? 'non-taxable' : 'taxable',
-        };
-      });
-  } catch (error) {
-    console.error(`Erro ao processar o arquivo OFX do Itaú:`, error);
-    throw new Error(`O arquivo OFX parece estar mal formatado ou não é um extrato bancário válido. Detalhes: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
-  }
+          sourceFile: 'Itaú OFX'
+        });
+
+        index++;
+      }
+
+      if (transactions.length === 0) {
+         if (!fileContent.includes('<OFX>')) {
+            return reject(new Error('O arquivo não parece ser um OFX válido. Faltam tags essenciais.'));
+         }
+         return reject(new Error('Nenhuma transação de crédito foi encontrada no arquivo OFX. Verifique se o arquivo contém movimentações de crédito.'));
+      }
+
+      resolve(transactions);
+
+    } catch (error) {
+      console.error(`Erro ao processar o arquivo OFX do Itaú:`, error);
+      reject(new Error(`Ocorreu um erro inesperado ao ler o arquivo OFX do Itaú.`));
+    }
+  });
 };
