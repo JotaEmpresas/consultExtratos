@@ -8,6 +8,7 @@ import { parseBancoDoBrasil } from './parsers/bancoDoBrasil';
 import { parseInfinitPay } from './parsers/infinitPay';
 import { parseItau } from './parsers/itau';
 import { parseItau2 } from './parsers/itau2';
+import { parseItauOfx } from './parsers/itauOfx';
 import { parseBradesco } from './parsers/bradesco';
 import { parseMercadoPago } from './parsers/mercadoPago';
 import { parseC6Bank } from './parsers/c6bank';
@@ -31,6 +32,7 @@ export const bankOptions = [
   { value: 'inter', label: 'Inter' },
   { value: 'itau', label: 'Itaú' },
   { value: 'itau-2', label: 'Itaú (Formato 2)' },
+  { value: 'itau-ofx', label: 'Itaú (OFX)' },
   { value: 'mercado-pago', label: 'Mercado Pago' },
   { value: 'nubank', label: 'Nubank' },
   { value: 'pagbank', label: 'PagBank' },
@@ -53,6 +55,7 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'inter': parseInter,
   'itau': parseItau,
   'itau-2': parseItau2,
+  'itau-ofx': parseItauOfx,
   'mercado-pago': parseMercadoPago,
   'nubank': parseNubank,
   'pagbank': parsePagBank,
