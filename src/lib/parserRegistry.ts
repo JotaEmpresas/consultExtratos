@@ -7,6 +7,7 @@ import { parseSantander } from './parsers/santander';
 import { parseBancoDoBrasil } from './parsers/bancoDoBrasil';
 import { parseInfinitPay } from './parsers/infinitPay';
 import { parseItau } from './parsers/itau';
+import { parseItau2 } from './parsers/itau2';
 import { parseBradesco } from './parsers/bradesco';
 import { parseMercadoPago } from './parsers/mercadoPago';
 import { parseC6Bank } from './parsers/c6bank';
@@ -29,6 +30,7 @@ export const bankOptions = [
   { value: 'infinitpay-3', label: 'InfinitPay (Formato 3)' },
   { value: 'inter', label: 'Inter' },
   { value: 'itau', label: 'Itaú' },
+  { value: 'itau-2', label: 'Itaú (Formato 2)' },
   { value: 'mercado-pago', label: 'Mercado Pago' },
   { value: 'nubank', label: 'Nubank' },
   { value: 'pagbank', label: 'PagBank' },
@@ -37,7 +39,6 @@ export const bankOptions = [
   { value: 'sicredi', label: 'Sicredi' },
   { value: 'sicoob', label: 'Sicoob' },
   { value: 'stone', label: 'Stone' },
-  // Futuros bancos serão adicionados aqui
 ];
 
 export const parsers: { [key: string]: (fileContent: string, companyCnpj: string, cpfList: string[], nameList: string[]) => Promise<Transaction[]> } = {
@@ -51,6 +52,7 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'infinitpay-3': parseInfinitPay3,
   'inter': parseInter,
   'itau': parseItau,
+  'itau-2': parseItau2,
   'mercado-pago': parseMercadoPago,
   'nubank': parseNubank,
   'pagbank': parsePagBank,
