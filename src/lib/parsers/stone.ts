@@ -1,10 +1,16 @@
 import { Transaction } from '@/types';
 import Papa from 'papaparse';
 
-// Helper to parse currency like "28,91"
+// Helper to parse currency like "28,91" or "R$ 1.234,56"
 const parseCurrency = (value: string | undefined): number => {
   if (!value) return 0;
-  const cleanedValue = value.replace(/"/g, '').trim().replace(',', '.');
+  // Remove R$, quotes, spaces, and thousands separator (dot), then replace decimal separator (comma) with dot
+  const cleanedValue = value
+    .replace(/R\$/g, '')
+    .replace(/"/g, '')
+    .replace(/\s/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.');
   return parseFloat(cleanedValue) || 0;
 };
 
@@ -26,13 +32,47 @@ export const parseStone = (
       skipEmptyLines: true,
       complete: (results) => {
         const transactions: Transaction[] = [];
+        const headers = results.meta.fields || [];
         
         results.data.forEach((row: any, index: number) => {
-          const movimentacao = row['Movimentação']?.trim();
-          const amount = parseCurrency(row['Valor']);
+          let data = row;
+          
+          // Check if the row is collapsed into the first header (happens if the whole row is quoted)
+          const firstKey = headers[0];
+          if (headers.length > 1 && row[firstKey] && row[firstKey].includes(',') && !row[headers[1]]) {
+            const line = row[firstKey];
+            const subParse = Papa.parse(line, { header: false });
+            if (subParse.data && subParse.data.length > 0) {
+              const values = subParse.data[0] as string[];
+              data = {};
+              headers.forEach((h, i) => {
+                data[h] = values[i];
+              });
+            }
+          }
+
+          // Normalize keys to handle potential encoding issues or variations
+          const getVal = (possibleKeys: string[]) => {
+            for (const key of possibleKeys) {
+              if (data[key] !== undefined) return data[key];
+              // Try normalized version
+              const normalizedKey = key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+              for (const actualKey of Object.keys(data)) {
+                const normalizedActual = actualKey.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                if (normalizedActual === normalizedKey) return data[actualKey];
+              }
+            }
+            return undefined;
+          };
+
+          const movimentacao = getVal(['Movimentação', 'Movimentacao'])?.trim();
+          const amount = parseCurrency(getVal(['Valor']));
+          const tipo = getVal(['Tipo'])?.trim() || '';
+          const origem = getVal(['Origem'])?.trim() || 'Origem não informada';
+          const dataStr = getVal(['Data'])?.trim() || '';
 
           if (movimentacao === 'Crédito' && amount > 0) {
-            const description = `${row['Tipo']?.trim()}: ${row['Origem']?.trim() || 'Origem não informada'}`;
+            const description = `${tipo}: ${origem}`;
             
             const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
@@ -48,7 +88,7 @@ export const parseStone = (
 
             const transaction: Transaction = {
               id: `stone-${Date.now()}-${index}`,
-              date: parseDate(row['Data']?.trim()),
+              date: parseDate(dataStr),
               description: description,
               amount: amount,
               category: isOwnAccount ? 'non-taxable' : 'taxable',
