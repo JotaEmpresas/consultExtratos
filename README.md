@@ -20,4 +20,4 @@ Banco da Amazonia - ok
 INFINITpaY3
 SICOOB
 itau 2
-cora ajustado
+cora ajustadoITU OFX
