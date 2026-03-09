@@ -62,6 +62,10 @@ const formats = [
     name: "InfinitPay",
     fields: ["Date", "Transaction Type", "Name", "Detail", "Amount"],
   },
+  {
+    name: "InfinitPay (Formato 4)",
+    fields: ["Data e hora", "Meio - Meio", "Meio - Bandeira", "Status", "Valor (R$)", "Líquido (R$)", "Origem - Nome"],
+  },
 ];
 
 export const SupportedFormats = () => {

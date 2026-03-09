@@ -19,6 +19,7 @@ import { parseSantander2 } from './parsers/santander2';
 import { parseSicoob } from './parsers/sicoob';
 import { parseInfinitPay2 } from './parsers/infinitPay2';
 import { parseInfinitPay3 } from './parsers/infinitPay3';
+import { parseInfinitPay4 } from './parsers/infinitPay4';
 
 export const bankOptions = [
   { value: 'banco-da-amazonia', label: 'Banco da Amazônia' },
@@ -29,6 +30,7 @@ export const bankOptions = [
   { value: 'infinitpay', label: 'InfinitPay' },
   { value: 'infinitpay-2', label: 'InfinitPay (Formato 2)' },
   { value: 'infinitpay-3', label: 'InfinitPay (Formato 3)' },
+  { value: 'infinitpay-4', label: 'InfinitPay (Formato 4)' },
   { value: 'inter', label: 'Inter' },
   { value: 'itau', label: 'Itaú' },
   { value: 'itau-2', label: 'Itaú (Formato 2)' },
@@ -52,6 +54,7 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'infinitpay': parseInfinitPay,
   'infinitpay-2': parseInfinitPay2,
   'infinitpay-3': parseInfinitPay3,
+  'infinitpay-4': parseInfinitPay4,
   'inter': parseInter,
   'itau': parseItau,
   'itau-2': parseItau2,
