@@ -97,7 +97,9 @@ const PrintableReport = ({ transactions, analysisData }: { transactions: Transac
   const totalTaxableAmount = transactions.filter(t => t.category === 'taxable').reduce((sum, t) => sum + t.amount, 0);
   const totalNonTaxableAmount = transactions.filter(t => t.category === 'non-taxable').reduce((sum, t) => sum + t.amount, 0);
   const totalInvoices = parseFloat(analysisData.totalInvoices.replace(',', '.')) || 0;
-  const difference = totalTaxableAmount - totalInvoices;
+  const entradaTotal = totalTaxableAmount + totalNonTaxableAmount;
+  const entradasTributaveis = totalTaxableAmount;
+  const diferenca = totalInvoices - entradasTributaveis;
 
   const groupedByBank = transactions.reduce((acc, t) => {
     const key = t.sourceFile;
@@ -114,28 +116,29 @@ const PrintableReport = ({ transactions, analysisData }: { transactions: Transac
         <p><strong>Mês de Competência:</strong> {format(analysisData.competenceDate, "MMMM 'de' yyyy", { locale: ptBR })}</p>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 text-center mb-8 border p-4 rounded-lg">
+      <div className="grid grid-cols-5 gap-4 text-center mb-8 border p-4 rounded-lg">
         <div><p className="text-sm">Total das Notas</p><p className="font-bold">{formatCurrency(totalInvoices)}</p></div>
-        <div><p className="text-sm">Entradas Tributáveis</p><p className="font-bold">{formatCurrency(totalTaxableAmount)}</p></div>
+        <div><p className="text-sm">Entrada Total</p><p className="font-bold">{formatCurrency(entradaTotal)}</p></div>
         <div><p className="text-sm">Entradas Não Tributáveis</p><p className="font-bold">{formatCurrency(totalNonTaxableAmount)}</p></div>
-        <div><p className="text-sm">Diferença</p><p className="font-bold">{formatCurrency(difference)}</p></div>
+        <div><p className="text-sm">Entradas Tributáveis</p><p className="font-bold">{formatCurrency(entradasTributaveis)}</p></div>
+        <div><p className="text-sm">Diferença (lançar no Imposto)</p><p className="font-bold">{formatCurrency(diferenca)}</p></div>
       </div>
 
       <div className="mb-8" style={{ pageBreakAfter: 'always' }}>
         <h2 className="text-xl font-bold mb-4 text-center">Resumo por Extrato</h2>
         <div className="grid grid-cols-2 gap-4">
           {Object.entries(groupedByBank).map(([bankName, bankTransactions]) => {
-            const totalTaxable = bankTransactions.filter(t => t.category === 'taxable').reduce((sum, t) => sum + t.amount, 0);
-            const totalNonTaxable = bankTransactions.filter(t => t.category === 'non-taxable').reduce((sum, t) => sum + t.amount, 0);
-            const totalForBank = totalTaxable + totalNonTaxable;
+            const entradasTributaveis = bankTransactions.filter(t => t.category === 'taxable').reduce((sum, t) => sum + t.amount, 0);
+            const entradasNaoTributaveis = bankTransactions.filter(t => t.category === 'non-taxable').reduce((sum, t) => sum + t.amount, 0);
+            const entradaTotal = entradasTributaveis + entradasNaoTributaveis;
 
             return (
               <div key={bankName} className="p-4 border rounded-lg" style={{ breakInside: 'avoid' }}>
                 <h3 className="font-bold text-lg mb-2 truncate">{bankName}</h3>
                 <div className="space-y-1 text-sm">
-                  <div className="flex justify-between"><span>Tributável:</span> <span className="font-medium">{formatCurrency(totalTaxable)}</span></div>
-                  <div className="flex justify-between"><span>Não Tributável:</span> <span className="font-medium">{formatCurrency(totalNonTaxable)}</span></div>
-                  <div className="flex justify-between border-t pt-1 mt-1"><strong>Total:</strong> <strong>{formatCurrency(totalForBank)}</strong></div>
+                  <div className="flex justify-between"><span>Entradas Tributáveis:</span> <span className="font-medium">{formatCurrency(entradasTributaveis)}</span></div>
+                  <div className="flex justify-between"><span>Entradas Não Tributáveis:</span> <span className="font-medium">{formatCurrency(entradasNaoTributaveis)}</span></div>
+                  <div className="flex justify-between border-t pt-1 mt-1"><strong>Entrada Total:</strong> <strong>{formatCurrency(entradaTotal)}</strong></div>
                 </div>
               </div>
             );
@@ -184,7 +187,9 @@ export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCat
   const totalTaxableAmount = transactions.filter(t => t.category === 'taxable').reduce((sum, t) => sum + t.amount, 0);
   const totalNonTaxableAmount = transactions.filter(t => t.category === 'non-taxable').reduce((sum, t) => sum + t.amount, 0);
   const totalInvoices = parseFloat(analysisData.totalInvoices.replace(',', '.')) || 0;
-  const difference = totalTaxableAmount - totalInvoices;
+  const entradaTotal = totalTaxableAmount + totalNonTaxableAmount;
+  const entradasTributaveis = totalTaxableAmount;
+  const diferenca = totalInvoices - entradasTributaveis;
 
   const groupedByBank = transactions.reduce((acc, t) => {
     const key = t.sourceFile;
@@ -223,11 +228,12 @@ export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCat
               </div>
             </div>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+          <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-4 text-center">
             <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg"><p className="text-sm text-muted-foreground">Total das Notas</p><p className="text-2xl font-bold">{formatCurrency(totalInvoices)}</p></div>
-            <div className="p-4 bg-green-100 dark:bg-green-900/50 rounded-lg"><p className="text-sm text-muted-foreground">Entradas Tributáveis</p><p className="text-2xl font-bold text-green-600">{formatCurrency(totalTaxableAmount)}</p></div>
+            <div className="p-4 bg-blue-100 dark:bg-blue-900/50 rounded-lg"><p className="text-sm text-muted-foreground">Entrada Total</p><p className="text-2xl font-bold text-blue-600">{formatCurrency(entradaTotal)}</p></div>
             <div className="p-4 bg-yellow-100 dark:bg-yellow-900/50 rounded-lg"><p className="text-sm text-muted-foreground">Entradas Não Tributáveis</p><p className="text-2xl font-bold text-yellow-600">{formatCurrency(totalNonTaxableAmount)}</p></div>
-            <div className={`p-4 rounded-lg ${difference > 0 ? 'bg-red-100 dark:bg-red-900/50' : 'bg-blue-100 dark:bg-blue-900/50'}`}><p className="text-sm text-muted-foreground">Diferença</p><p className={`text-2xl font-bold ${difference > 0 ? 'text-red-600' : 'text-blue-600'}`}>{formatCurrency(difference)}</p></div>
+            <div className="p-4 bg-green-100 dark:bg-green-900/50 rounded-lg"><p className="text-sm text-muted-foreground">Entradas Tributáveis</p><p className="text-2xl font-bold text-green-600">{formatCurrency(entradasTributaveis)}</p></div>
+            <div className={`p-4 rounded-lg ${diferenca < 0 ? 'bg-red-100 dark:bg-red-900/50' : 'bg-green-100 dark:bg-green-900/50'}`}><p className="text-sm text-muted-foreground">Diferença (lançar no Imposto)</p><p className={`text-2xl font-bold ${diferenca < 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(diferenca)}</p></div>
           </CardContent>
         </Card>
         
