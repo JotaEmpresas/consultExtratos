@@ -21,3 +21,4 @@ INFINITpaY3
 SICOOB
 itau 2
 cora ajustadoITU OFX
+sicredi ofx
