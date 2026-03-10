@@ -9,6 +9,7 @@ import { parseInfinitPay } from './parsers/infinitPay';
 import { parseItau } from './parsers/itau';
 import { parseItau2 } from './parsers/itau2';
 import { parseItauOfx } from './parsers/itauOfx';
+import { parseSicrediOfx } from './parsers/sicrediOfx';
 import { parseBradesco } from './parsers/bradesco';
 import { parseMercadoPago } from './parsers/mercadoPago';
 import { parseC6Bank } from './parsers/c6bank';
@@ -41,6 +42,7 @@ export const bankOptions = [
   { value: 'santander', label: 'Santander' },
   { value: 'santander-2', label: 'Santander (Formato 2)' },
   { value: 'sicredi', label: 'Sicredi' },
+  { value: 'sicredi-ofx', label: 'Sicredi (OFX)' },
   { value: 'sicoob', label: 'Sicoob' },
   { value: 'stone', label: 'Stone' },
 ];
@@ -65,6 +67,7 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'santander': parseSantander,
   'santander-2': parseSantander2,
   'sicredi': parseSicredi,
+  'sicredi-ofx': parseSicrediOfx,
   'sicoob': parseSicoob,
   'stone': parseStone,
 };
