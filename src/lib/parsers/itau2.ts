@@ -1,7 +1,4 @@
-import { Transaction } from '@/types';
-import Papa from 'papaparse';
-
-// Helper para converter moeda no formato "1.234,56" ou "-1.234,56"
+import { categorizeTransaction, extractNumbers, normalizeText } from '../utils';
 const parseCurrency = (value: string | undefined): { amount: number, isDebit: boolean } => {
   if (!value) return { amount: 0, isDebit: false };
   
@@ -38,8 +35,8 @@ export const parseItau2 = (
           const dateMatch = cells[0].match(dateRegex);
 
           if (dateMatch) {
-            // Se já tínhamos uma transação pendente, salva se for crédito
-            if (currentTx && currentTx.date && !currentTx.isDebit && currentTx.amount && currentTx.amount > 0) {
+            // Se já tínhamos uma transação pendente, salva
+            if (currentTx && currentTx.date && currentTx.amount !== 0) {
               if (!currentTx.description?.toLowerCase().includes('saldo')) {
                 transactions.push(currentTx as Transaction);
               }
@@ -63,7 +60,7 @@ export const parseItau2 = (
               const amtMatch = cell.match(amountRegex);
               if (amtMatch) {
                 const { amount, isDebit } = parseCurrency(amtMatch[1]);
-                currentTx.amount = amount;
+                currentTx.amount = isDebit ? -amount : amount;
                 currentTx.isDebit = isDebit;
                 // Remove o valor da descrição se ele estiver lá
                 if (i === 0) currentTx.description = initialDesc.replace(amtMatch[1], '').trim();
@@ -76,7 +73,7 @@ export const parseItau2 = (
               const amtMatch = cell.match(amountRegex);
               if (amtMatch) {
                 const { amount, isDebit } = parseCurrency(amtMatch[1]);
-                currentTx!.amount = amount;
+                currentTx!.amount = isDebit ? -amount : amount;
                 currentTx!.isDebit = isDebit;
                 
                 // Se o valor estava colado num CNPJ, limpa a descrição
@@ -90,7 +87,7 @@ export const parseItau2 = (
         });
 
         // Salva a última transação
-        if (currentTx && currentTx.date && !currentTx.isDebit && currentTx.amount && currentTx.amount > 0) {
+        if (currentTx && currentTx.date && currentTx.amount !== 0) {
           if (!currentTx.description?.toLowerCase().includes('saldo')) {
             transactions.push(currentTx as Transaction);
           }
@@ -98,21 +95,17 @@ export const parseItau2 = (
 
         // Pós-processamento: Classificação e limpeza de descrição
         const finalTransactions = transactions.map(t => {
-          const normalizedDesc = t.description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
-
-          const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-          const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-          const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
-
-          const isOwnAccount = 
-            (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
-            cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-            cleanedNameList.some(name => name && normalizedDesc.includes(name));
+          const category = categorizeTransaction(
+            t.description,
+            companyCnpj,
+            cpfList,
+            nameList,
+            t.amount
+          );
 
           return {
             ...t,
-            category: isOwnAccount ? 'non-taxable' : 'taxable'
+            category
           };
         });
 

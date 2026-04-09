@@ -4,7 +4,7 @@ export interface Invoice {
   amount: number;
 }
 
-export type TransactionCategory = 'taxable' | 'non-taxable';
+export type TransactionCategory = 'taxable' | 'non-taxable' | 'payment';
 
 export interface Transaction {
   id?: string; // Opcional, geramos no front se vier vazio
@@ -30,6 +30,7 @@ export interface AiProcessingResponse {
   analise: string; // O texto/parecer da IA
   transacoesTributaveis: Transaction[];
   transacoesNaoTributaveis: Transaction[];
+  transacoesPagamento?: Transaction[];
 }
 
 export interface AiAnalysisResult {

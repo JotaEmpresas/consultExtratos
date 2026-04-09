@@ -1,5 +1,6 @@
 import { Transaction } from '@/types';
 import Papa from 'papaparse';
+import { categorizeTransaction, extractNumbers, normalizeText } from '../utils';
 
 // Helper to clean and parse the specific currency format from the bank
 const parseCurrency = (value: string | undefined): number => {
@@ -39,35 +40,29 @@ export const parseBancoDaAmazonia = (
         results.data.forEach((row: any, index: number) => {
           const dc = row['DC']?.trim();
           const amount = parseCurrency(row['VALOR']);
+          const signedAmount = dc === 'D' ? -amount : amount;
 
-          // We are only interested in credit entries
-          if (dc === 'C' && amount > 0) {
-            const description = row['DESCRICAO_HISTORICO']?.trim() || 'Descrição não informada';
+          const description = row['DESCRICAO_HISTORICO']?.trim() || 'Descrição não informada';
 
-            const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
+          const category = categorizeTransaction(
+            description,
+            companyCnpj,
+            cpfList,
+            nameList,
+            signedAmount
+          );
 
-            const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-            const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-            const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
-
-            const isOwnAccount = 
-              (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
-              cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-              cleanedNameList.some(name => name && normalizedDesc.includes(name));
-
-            const transaction: Transaction = {
-              id: `bda-${Date.now()}-${index}`,
-              date: row['DATA']?.trim() || '',
-              description: description,
-              amount: amount,
-              category: isOwnAccount ? 'non-taxable' : 'taxable',
-            };
-            
-            // Basic validation
-            if (transaction.date && transaction.description) {
-              transactions.push(transaction);
-            }
+          const transaction: Transaction = {
+            id: `bda-${Date.now()}-${index}`,
+            date: row['DATA']?.trim() || '',
+            description: description,
+            amount: signedAmount,
+            category,
+          };
+          
+          // Basic validation
+          if (transaction.date && transaction.description) {
+            transactions.push(transaction);
           }
         });
         

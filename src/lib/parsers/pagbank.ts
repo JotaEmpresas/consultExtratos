@@ -1,5 +1,6 @@
 import { Transaction } from '@/types';
 import Papa from 'papaparse';
+import { categorizeTransaction, extractNumbers, normalizeText } from '../utils';
 
 // Helper para converter moeda no formato "1,98"
 const parseCurrency = (value: string | undefined): number => {
@@ -29,24 +30,20 @@ export const parsePagBank = (
           if (amount > 0) {
             const description = `${row['TIPO']?.trim()}: ${row['DESCRICAO']?.trim()}` || 'Descrição não informada';
 
-            const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
-
-            const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-            const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-            const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
-
-            const isOwnAccount = 
-              (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
-              cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-              cleanedNameList.some(name => name && normalizedDesc.includes(name));
+            const category = categorizeTransaction(
+              description,
+              companyCnpj,
+              cpfList,
+              nameList,
+              amount
+            );
 
             const transaction: Transaction = {
               id: row['CODIGO DA TRANSACAO']?.trim() || `pagbank-${Date.now()}-${Math.random()}`,
               date: row['DATA']?.trim() || '',
               description: description,
               amount: amount,
-              category: isOwnAccount ? 'non-taxable' : 'taxable',
+              category,
             };
             
             if (transaction.date && transaction.description) {

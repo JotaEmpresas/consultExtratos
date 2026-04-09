@@ -1,4 +1,5 @@
 import { Transaction } from '@/types';
+import { categorizeTransaction, extractNumbers, normalizeText } from '../utils';
 
 // Helper para converter moeda no formato "1.234,56" ou "-50,00"
 const parseCurrency = (value: string | undefined): number => {
@@ -45,29 +46,22 @@ export const parseSicredi = (
         const [, date, description, valueStr] = match;
         const amount = parseCurrency(valueStr);
 
-        // Consideramos apenas as entradas (valores positivos)
-        if (amount > 0) {
-          const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
+        const category = categorizeTransaction(
+          description.trim(),
+          companyCnpj,
+          cpfList,
+          nameList,
+          amount
+        );
 
-          const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-          const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-          const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
-
-          const isOwnAccount = 
-            (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
-            cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-            cleanedNameList.some(name => name && normalizedDesc.includes(name));
-
-          const transaction: Transaction = {
-            id: `sicredi-${Date.now()}-${Math.random()}`,
-            date: date.trim(),
-            description: description.trim(),
-            amount: amount,
-            category: isOwnAccount ? 'non-taxable' : 'taxable',
-          };
-          transactions.push(transaction);
-        }
+        const transaction: Transaction = {
+          id: `sicredi-${Date.now()}-${Math.random()}`,
+          date: date.trim(),
+          description: description.trim(),
+          amount: amount,
+          category,
+        };
+        transactions.push(transaction);
       }
     }
 

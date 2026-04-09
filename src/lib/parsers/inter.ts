@@ -1,5 +1,6 @@
 import { Transaction } from '@/types';
 import Papa from 'papaparse';
+import { categorizeTransaction, extractNumbers, normalizeText } from '../utils';
 
 // Helper para converter moeda no formato "+R$ 1.234,56"
 const parseCurrency = (value: string | undefined): number => {
@@ -37,37 +38,29 @@ export const parseInter = (
         results.data.forEach((row: any, index: number) => {
           const amountStr = row['Valor']?.trim();
 
-          // Estamos interessados apenas nas entradas (valores positivos)
-          if (amountStr && amountStr.startsWith('+')) {
+          // Processar todas as transações (créditos e débitos)
+          if (amountStr) {
             const amount = parseCurrency(amountStr);
+            const description = `${row['Tipo de transação']?.trim()}: ${row['Nome']?.trim()}` || 'Descrição não informada';
 
-            if (amount > 0) {
-              const description = `${row['Tipo de transação']?.trim()}: ${row['Nome']?.trim()}` || 'Descrição não informada';
+            const category = categorizeTransaction(
+              description,
+              companyCnpj,
+              cpfList,
+              nameList,
+              amount
+            );
 
-              const fullTextForCheck = `${description} ${row['Detalhe']?.trim()}`.toLowerCase();
-              const normalizedDesc = fullTextForCheck.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-              const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
-
-              const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-              const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-              const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
-
-              const isOwnAccount = 
-                (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
-                cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-                cleanedNameList.some(name => name && normalizedDesc.includes(name));
-
-              const transaction: Transaction = {
-                id: `inter-${Date.now()}-${index}`,
-                date: formatDate(row['Data']?.trim()),
-                description: description,
-                amount: amount,
-                category: isOwnAccount ? 'non-taxable' : 'taxable',
-              };
-              
-              if (transaction.date && transaction.description) {
-                transactions.push(transaction);
-              }
+            const transaction: Transaction = {
+              id: `inter-${Date.now()}-${index}`,
+              date: formatDate(row['Data']?.trim()),
+              description: description,
+              amount: amount,
+              category,
+            };
+            
+            if (transaction.date && transaction.description) {
+              transactions.push(transaction);
             }
           }
         });

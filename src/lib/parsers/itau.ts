@@ -1,5 +1,6 @@
 import { Transaction } from '@/types';
 import Papa from 'papaparse';
+import { categorizeTransaction, extractNumbers, normalizeText } from '../utils';
 
 // Helper para converter moeda no formato "1234,56"
 const parseCurrency = (value: string | undefined): number => {
@@ -39,43 +40,36 @@ export const parseItau = (
         results.data.forEach((row: any, index: number) => {
           const amount = parseCurrency(row['Valor (R$)']);
 
-          // Processar apenas transações de crédito (valores positivos)
-          if (amount > 0) {
-            const lancamento = row['Lançamento']?.trim() || '';
-            const razaoSocial = row['Razão Social']?.trim() || '';
-            const doc = row['CPF/CNPJ']?.trim() || '';
+          const lancamento = row['Lançamento']?.trim() || '';
+          const razaoSocial = row['Razão Social']?.trim() || '';
+          const doc = row['CPF/CNPJ']?.trim() || '';
 
-            // Ignorar linhas de resumo de saldo
-            if (lancamento.toLowerCase().includes('saldo total disponível')) {
-              return;
-            }
+          // Ignorar linhas de resumo de saldo
+          if (lancamento.toLowerCase().includes('saldo total disponível')) {
+            return;
+          }
 
-            const description = razaoSocial ? `${lancamento} - ${razaoSocial}` : lancamento;
-            
-            const textForCheck = `${description} ${doc}`.toLowerCase();
-            const normalizedDesc = textForCheck.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
+          const description = razaoSocial ? `${lancamento} - ${razaoSocial}` : lancamento;
+          
+          // Categoriza usando a função centralizada
+          const category = categorizeTransaction(
+            description,
+            companyCnpj,
+            cpfList,
+            nameList,
+            amount
+          );
 
-            const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-            const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-            const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
-
-            const isOwnAccount = 
-              (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
-              cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-              cleanedNameList.some(name => name && normalizedDesc.includes(name));
-
-            const transaction: Transaction = {
-              id: `itau-${Date.now()}-${index}`,
-              date: row['Data']?.trim() || '',
-              description: description || 'Descrição não informada',
-              amount: amount,
-              category: isOwnAccount ? 'non-taxable' : 'taxable',
-            };
-            
-            if (transaction.date) {
-              transactions.push(transaction);
-            }
+          const transaction: Transaction = {
+            id: `itau-${Date.now()}-${index}`,
+            date: row['Data']?.trim() || '',
+            description: description || 'Descrição não informada',
+            amount: amount,
+            category,
+          };
+          
+          if (transaction.date) {
+            transactions.push(transaction);
           }
         });
         

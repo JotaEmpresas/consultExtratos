@@ -7,6 +7,7 @@ import { ptBR } from 'date-fns/locale';
 import { ArrowRightCircle, ArrowLeftCircle, Printer, Banknote, BrainCircuit, Loader2 } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { isBalanceOrSummary } from '@/lib/utils';
 
 interface AnalysisResultProps {
   transactions: Transaction[];
@@ -94,14 +95,25 @@ const PrintableTable = ({ title, transactions, total }: { title: string, transac
 );
 
 const PrintableReport = ({ transactions, analysisData }: { transactions: Transaction[], analysisData: AnalysisData }) => {
-  const totalTaxableAmount = transactions.filter(t => t.category === 'taxable').reduce((sum, t) => sum + t.amount, 0);
-  const totalNonTaxableAmount = transactions.filter(t => t.category === 'non-taxable').reduce((sum, t) => sum + t.amount, 0);
+  // Filtra transações de saldo e resumo
+  const filteredTransactions = transactions.filter(t => !isBalanceOrSummary(t.description));
+  
+  const totalTaxableAmount = filteredTransactions.filter(t => t.category === 'taxable').reduce((sum, t) => sum + t.amount, 0);
+  const totalNonTaxableAmount = filteredTransactions.filter(t => t.category === 'non-taxable').reduce((sum, t) => sum + t.amount, 0);
+  const totalPaymentAmount = filteredTransactions.filter(t => t.category === 'payment').reduce((sum, t) => sum + t.amount, 0);
   const totalInvoices = parseFloat(analysisData.totalInvoices.replace(',', '.')) || 0;
   const entradaTotal = totalTaxableAmount + totalNonTaxableAmount;
   const entradasTributaveis = totalTaxableAmount;
   const diferenca = totalInvoices - entradasTributaveis;
 
-  const groupedByBank = transactions.reduce((acc, t) => {
+  const groupedByBank = filteredTransactions.filter(t => t.category !== 'payment').reduce((acc, t) => {
+    const key = t.sourceFile;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(t);
+    return acc;
+  }, {} as Record<string, Transaction[]>);
+
+  const paymentsGroupedByBank = filteredTransactions.filter(t => t.category === 'payment').reduce((acc, t) => {
     const key = t.sourceFile;
     if (!acc[key]) acc[key] = [];
     acc[key].push(t);
@@ -179,20 +191,48 @@ const PrintableReport = ({ transactions, analysisData }: { transactions: Transac
             </div>
           );
         })}
+
+        {Object.entries(paymentsGroupedByBank).length > 0 && (
+          <div style={{ pageBreakAfter: 'always' }}>
+            <h2 className="text-xl font-bold mb-4 text-center">Pagamentos e Saídas</h2>
+            <div className="space-y-8">
+              {Object.entries(paymentsGroupedByBank).map(([bankName, payments]) => {
+                const totalPayments = payments.reduce((sum, t) => sum + t.amount, 0);
+                return (
+                  <div key={bankName} className="p-4 border rounded-lg" style={{ breakInside: 'avoid' }}>
+                    <h3 className="text-lg font-bold mb-2 border-b pb-2">{bankName}</h3>
+                    <PrintableTable title="Pagamentos e Saídas" transactions={payments} total={totalPayments} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCategory, onAiAnalysis, isAiProcessing }: AnalysisResultProps) => {
-  const totalTaxableAmount = transactions.filter(t => t.category === 'taxable').reduce((sum, t) => sum + t.amount, 0);
-  const totalNonTaxableAmount = transactions.filter(t => t.category === 'non-taxable').reduce((sum, t) => sum + t.amount, 0);
+  // Filtra transações de saldo e resumo
+  const filteredTransactions = transactions.filter(t => !isBalanceOrSummary(t.description));
+  
+  const totalTaxableAmount = filteredTransactions.filter(t => t.category === 'taxable').reduce((sum, t) => sum + t.amount, 0);
+  const totalNonTaxableAmount = filteredTransactions.filter(t => t.category === 'non-taxable').reduce((sum, t) => sum + t.amount, 0);
+  const totalPaymentAmount = filteredTransactions.filter(t => t.category === 'payment').reduce((sum, t) => sum + t.amount, 0);
   const totalInvoices = parseFloat(analysisData.totalInvoices.replace(',', '.')) || 0;
   const entradaTotal = totalTaxableAmount + totalNonTaxableAmount;
   const entradasTributaveis = totalTaxableAmount;
   const diferenca = totalInvoices - entradasTributaveis;
 
-  const groupedByBank = transactions.reduce((acc, t) => {
+  const groupedByBank = filteredTransactions.filter(t => t.category !== 'payment').reduce((acc, t) => {
+    const key = t.sourceFile;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(t);
+    return acc;
+  }, {} as Record<string, Transaction[]>);
+
+  const paymentsGroupedByBank = filteredTransactions.filter(t => t.category === 'payment').reduce((acc, t) => {
     const key = t.sourceFile;
     if (!acc[key]) acc[key] = [];
     acc[key].push(t);
@@ -235,6 +275,7 @@ export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCat
             <div className="p-4 bg-yellow-100 dark:bg-yellow-900/50 rounded-lg"><p className="text-sm text-muted-foreground">Entradas Não Tributáveis</p><p className="text-2xl font-bold text-yellow-600">{formatCurrency(totalNonTaxableAmount)}</p></div>
             <div className="p-4 bg-green-100 dark:bg-green-900/50 rounded-lg"><p className="text-sm text-muted-foreground">Entradas Tributáveis</p><p className="text-2xl font-bold text-green-600">{formatCurrency(entradasTributaveis)}</p></div>
             <div className={`p-4 rounded-lg ${diferenca < 0 ? 'bg-red-100 dark:bg-red-900/50' : 'bg-green-100 dark:bg-green-900/50'}`}><p className="text-sm text-muted-foreground">Diferença (lançar no Imposto)</p><p className={`text-2xl font-bold ${diferenca < 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(diferenca)}</p></div>
+            <div className="p-4 bg-red-100 dark:bg-red-900/50 rounded-lg md:col-span-1"><p className="text-sm text-muted-foreground">Total de Pagamentos</p><p className="text-2xl font-bold text-red-600">{formatCurrency(totalPaymentAmount)}</p></div>
           </CardContent>
         </Card>
         
@@ -263,6 +304,34 @@ export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCat
             );
           })}
         </div>
+
+        {Object.entries(paymentsGroupedByBank).length > 0 && (
+          <Card className="shadow-lg border-red-200 dark:border-red-700 mt-8 overflow-hidden">
+            <CardHeader className="bg-red-50 dark:bg-red-900/50">
+              <CardTitle className="text-lg font-semibold text-red-700 dark:text-red-400">
+                Pagamentos e Saídas ({transactions.filter(t => t.category === 'payment').length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="space-y-6">
+                {Object.entries(paymentsGroupedByBank).map(([bankName, payments]) => {
+                  const totalPayments = payments.reduce((sum, t) => sum + t.amount, 0);
+                  return (
+                    <div key={bankName} className="border rounded-lg p-4">
+                      <h3 className="font-semibold text-lg mb-4">{bankName}</h3>
+                      <InteractiveTransactionTable 
+                        title="Pagamentos e Saídas" 
+                        transactions={payments} 
+                        total={totalPayments} 
+                        actionButton={() => null}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
       <PrintableReport transactions={transactions} analysisData={analysisData} />
     </div>

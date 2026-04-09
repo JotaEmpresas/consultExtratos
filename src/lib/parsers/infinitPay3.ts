@@ -1,5 +1,6 @@
 import { Transaction } from '@/types';
 import Papa from 'papaparse';
+import { categorizeTransaction, extractNumbers, normalizeText } from '../utils';
 
 // Helper para converter moeda no formato "+R$ 23,05"
 const parseCurrency = (value: string | undefined): number => {
@@ -40,45 +41,37 @@ export const parseInfinitPay3 = (
         results.data.forEach((row: any, index: number) => {
           const valorStr = row['Valor']?.trim();
 
-          // Processar apenas transações de crédito (que começam com '+')
-          if (valorStr && valorStr.startsWith('+')) {
+          // Processar todas as transações (créditos e débitos)
+          if (valorStr) {
             const amount = parseCurrency(valorStr);
-
-            if (amount > 0) {
-              const tipo = row['Tipo de transação']?.trim() || '';
-              const nome = row['Nome']?.trim() || '';
-              const detalhe = row['Detalhe']?.trim() || '';
-              
-              let description = tipo;
+            const tipo = row['Tipo de transação']?.trim() || '';
+            const nome = row['Nome']?.trim() || '';
+            const detalhe = row['Detalhe']?.trim() || '';
+            
+            let description = tipo;
               if (nome) description += `: ${nome}`;
               if (detalhe) description += ` (${detalhe})`;
               if (!description) description = 'Descrição não informada';
 
-              const fullTextForCheck = `${description}`.toLowerCase();
-              const normalizedDesc = fullTextForCheck.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-              const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
-
-              const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-              const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-              const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
-
-              const isOwnAccount = 
-                (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
-                cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-                cleanedNameList.some(name => name && normalizedDesc.includes(name));
+              const category = categorizeTransaction(
+                description,
+                companyCnpj,
+                cpfList,
+                nameList,
+                amount
+              );
 
               const transaction: Transaction = {
                 id: `infinitpay3-${Date.now()}-${index}`,
                 date: formatDate(row['Data']?.trim()),
                 description: description,
                 amount: amount,
-                category: isOwnAccount ? 'non-taxable' : 'taxable',
+                category,
               };
               
               if (transaction.date) {
                 transactions.push(transaction);
               }
-            }
           }
         });
         

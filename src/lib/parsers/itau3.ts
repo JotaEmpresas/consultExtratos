@@ -1,4 +1,5 @@
 import { Transaction } from '@/types';
+import { categorizeTransaction, extractNumbers, normalizeText } from '../utils';
 
 // Helper para converter moeda no formato "1.234,56" ou "-1.234,56"
 const parseCurrency = (value: string | undefined): { amount: number, isDebit: boolean } => {
@@ -100,7 +101,7 @@ export const parseItau3 = (
         }
 
         const { amount: parsedAmount, isDebit: parsedIsDebit } = parseCurrency(valueUsed);
-        amount = parsedAmount;
+        amount = parsedIsDebit ? -parsedAmount : parsedAmount;
         isDebit = parsedIsDebit;
 
         // Limpa descrição removendo data, valores e espaços extras
@@ -137,21 +138,17 @@ export const parseItau3 = (
 
       // Pós-processamento: Classificação
       const finalTransactions = transactions.map(t => {
-        const normalizedDesc = t.description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
-
-        const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-        const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-        const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
-
-        const isOwnAccount = 
-          (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
-          cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-          cleanedNameList.some(name => name && normalizedDesc.includes(name));
+        const category = categorizeTransaction(
+          t.description,
+          companyCnpj,
+          cpfList,
+          nameList,
+          t.amount
+        );
 
         return {
           ...t,
-          category: isOwnAccount ? 'non-taxable' : 'taxable'
+          category
         };
       });
 

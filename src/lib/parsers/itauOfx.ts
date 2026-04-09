@@ -1,4 +1,5 @@
 import { Transaction } from '@/types';
+import { categorizeTransaction, extractNumbers, normalizeText } from '../utils';
 
 // Helper to format OFX date (YYYYMMDD...) to DD/MM/YYYY
 const formatDate = (ofxDate: string): string => {
@@ -49,24 +50,20 @@ export const parseItauOfx = async (
         const fitid = fitidMatch ? fitidMatch[1].trim() : `itau-ofx-${Date.now()}-${index}`;
 
         // Classification logic
-        const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
-
-        const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-        const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-        const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
-
-        const isOwnAccount = 
-          (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
-          cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-          cleanedNameList.some(name => name && normalizedDesc.includes(name));
+        const category = categorizeTransaction(
+          description,
+          companyCnpj,
+          cpfList,
+          nameList,
+          amount
+        );
 
         transactions.push({
           id: fitid,
           date: date,
           description: description,
           amount: amount,
-          category: isOwnAccount ? 'non-taxable' : 'taxable',
+          category,
           sourceFile: 'Itaú OFX'
         });
 

@@ -1,5 +1,7 @@
 import { Transaction } from '@/types';
 
+import { categorizeTransaction, extractNumbers, normalizeText } from '../utils';
+
 // Helper para formatar data ISO (2026-01-30T00:00:00Z) ou OFX (20260130...) para DD/MM/YYYY
 const formatDate = (dateStr: string): string => {
   if (!dateStr) return '';
@@ -72,24 +74,20 @@ export const parseSicoob = async (
         const fitid = fitidMatch ? fitidMatch[1].trim() : `sicoob-${Date.now()}-${index}`;
 
         // Lógica de classificação (Tributável vs Não Tributável)
-        const normalizedDesc = description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const numbersOnlyDesc = normalizedDesc.replace(/[^0-9]/g, '');
-
-        const cleanedCnpj = companyCnpj.replace(/\D/g, '');
-        const cleanedCpfList = cpfList.map(cpf => cpf.replace(/\D/g, '')).filter(Boolean);
-        const cleanedNameList = nameList.map(name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()).filter(Boolean);
-
-        const isOwnAccount = 
-          (cleanedCnpj && numbersOnlyDesc.includes(cleanedCnpj)) ||
-          cleanedCpfList.some(cpf => cpf && numbersOnlyDesc.includes(cpf)) ||
-          cleanedNameList.some(name => name && normalizedDesc.includes(name));
+        const category = categorizeTransaction(
+          description,
+          companyCnpj,
+          cpfList,
+          nameList,
+          t.amount
+        );
 
         transactions.push({
           id: fitid,
           date: date,
           description: description,
           amount: amount,
-          category: isOwnAccount ? 'non-taxable' : 'taxable',
+          category,
           sourceFile: 'Sicoob OFX'
         });
 
