@@ -5,18 +5,23 @@ import { MadeWithDyad } from "@/components/made-with-dyad";
 import { parsers } from "@/lib/parserRegistry";
 import { readFilesForWebhook } from "@/lib/fileReader";
 import { showError, showSuccess, showLoading, dismissToast } from "@/utils/toast";
-import { Transaction, AnalysisData } from "@/types";
+import { Transaction, AnalysisData, AiAnalysisResult, Invoice } from "@/types";
 import { SettingsSheet } from "@/components/SettingsSheet";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import { AIComparisonReport } from "@/components/AIComparisonReport";
+import { parseInvoices } from "@/lib/invoiceParser";
 
 type AnalysisStep = 'input' | 'result';
 
 const Index = () => {
   const [step, setStep] = useState<AnalysisStep>('input');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [aiResult, setAiResult] = useState<AiAnalysisResult | null>(null);
   const [aiAnalysisText, setAiAnalysisText] = useState<string>("");
   const [corsError, setCorsError] = useState(false);
 
@@ -26,12 +31,37 @@ const Index = () => {
     return type === 'test' ? testUrl : prodUrl;
   };
 
-  const handleProcessAnalysis = async (data: AnalysisData, bankFiles: { bank: string, files: File[] }[]) => {
+  const handleProcessAnalysis = async (data: Omit<AnalysisData, 'totalInvoices'>, bankFiles: { bank: string, files: File[] }[], invoiceFiles: File[]) => {
     setIsProcessing(true);
     setCorsError(false);
-    let toastId = showLoading("Processando arquivos...");
+    const toastId = showLoading("Processando arquivos, por favor aguarde...");
 
     try {
+      // Determine total invoices based on mode
+      let totalAmount = "0";
+      let parsedInvoices: Invoice[] = [];
+
+      if (data.manualRevenue !== undefined) {
+        // Manual revenue mode
+        totalAmount = data.manualRevenue.toString();
+        setInvoices([]);
+      } else {
+        // Parse invoices from files
+        const result = await parseInvoices(invoiceFiles);
+        parsedInvoices = result.invoices;
+        totalAmount = result.totalAmount.toString();
+        
+        if (parsedInvoices.length === 0) {
+          throw new Error("Nenhuma nota fiscal válida foi encontrada. Verifique o formato dos arquivos (XML).");
+        }
+        setInvoices(parsedInvoices);
+      }
+
+      const fullAnalysisData: AnalysisData = {
+        ...data,
+        totalInvoices: totalAmount,
+      };
+
       const cpfList = data.cpf.split(',').map(s => s.trim()).filter(Boolean);
       const nameList = data.partnerNames.split(',').map(s => s.trim()).filter(Boolean);
       
@@ -66,7 +96,7 @@ const Index = () => {
       }
       
       setTransactions(allTransactions);
-      setAnalysisData(data);
+      setAnalysisData(fullAnalysisData);
       setAiAnalysisText("Análise local concluída. Os dados abaixo foram extraídos e classificados automaticamente.");
       
       setStep('result');
@@ -95,13 +125,75 @@ const Index = () => {
   const handleNewAnalysis = () => {
     setStep('input');
     setTransactions([]);
+    setInvoices([]);
     setAnalysisData(null);
     setAiAnalysisText("");
     setCorsError(false);
+    setAiResult(null);
   };
 
   const handleReanalyzeAi = async (type: 'prod' | 'test') => {
-     showError("A funcionalidade de reanálise com IA será implementada futuramente.");
+    setIsAiProcessing(true);
+    setCorsError(false);
+    let toastId = showLoading("Analisando com IA, isso pode levar um momento...");
+
+    try {
+      const webhookUrl = getWebhookUrl(type);
+
+      // Pre-process and filter transactions to reduce payload size
+      const filteredTransactions = transactions.filter(t => {
+        // Rule 1: Remove very small transactions (likely noise/fees)
+        if (t.amount < 1.00) {
+          return false;
+        }
+
+        // Rule 2: Remove transactions confidently classified as non-taxable (e.g., internal transfers)
+        if (t.category === 'non-taxable') {
+          const preClassification = preClassifyTransaction(t.description);
+          // If our keyword-based check also confirms it's non-taxable, it's safe to filter out
+          if (preClassification === 'non-taxable') {
+            return false;
+          }
+        }
+        
+        return true;
+      });
+
+      const payload = {
+        analysisData,
+        transactions: filteredTransactions,
+        invoices,
+      };
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na chamada do webhook: ${response.statusText} (${response.status})`);
+      }
+
+      const result: AiAnalysisResult = await response.json();
+      setAiResult(result);
+      dismissToast(toastId);
+      showSuccess("Análise da IA concluída!");
+
+    } catch (error) {
+      console.error("Erro na análise com IA:", error);
+      dismissToast(toastId);
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        setCorsError(true);
+        showError("Erro de conexão com o webhook. Verifique a configuração de CORS no seu servidor n8n.");
+      } else {
+        showError(error instanceof Error ? error.message : "Ocorreu um erro desconhecido na análise com IA.");
+      }
+    } finally {
+      setIsAiProcessing(false);
+    }
   };
 
   return (
@@ -137,26 +229,26 @@ const Index = () => {
           </div>
         )}
         
-        {step === 'result' && analysisData && (
+        {step === 'result' && analysisData && !aiResult && (
           <div className="space-y-6">
-            {aiAnalysisText && (
-               <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-indigo-100 dark:border-indigo-900 no-print">
-                  <h3 className="text-lg font-semibold mb-2 text-indigo-600 dark:text-indigo-400">Status da Análise</h3>
-                  <div className="prose dark:prose-invert max-w-none text-sm whitespace-pre-wrap">
-                    {aiAnalysisText}
-                  </div>
-               </div>
-            )}
-
             <AnalysisResult 
               transactions={transactions} 
               analysisData={analysisData}
               onBack={handleNewAnalysis}
               onToggleCategory={handleToggleTransactionCategory}
               onAiAnalysis={handleReanalyzeAi}
-              isAiProcessing={false}
+              isAiProcessing={isAiProcessing}
             />
           </div>
+        )}
+
+        {step === 'result' && analysisData && aiResult && (
+           <AIComparisonReport 
+            originalTransactions={transactions}
+            aiResult={aiResult}
+            analysisData={analysisData}
+            onBack={() => setAiResult(null)}
+          />
         )}
       </main>
       

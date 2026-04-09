@@ -8,6 +8,7 @@ import { parseBancoDoBrasil } from './parsers/bancoDoBrasil';
 import { parseInfinitPay } from './parsers/infinitPay';
 import { parseItau } from './parsers/itau';
 import { parseItau2 } from './parsers/itau2';
+import { parseItau3 } from './parsers/itau3';
 import { parseItauOfx } from './parsers/itauOfx';
 import { parseSicrediOfx } from './parsers/sicrediOfx';
 import { parseBradesco } from './parsers/bradesco';
@@ -22,6 +23,7 @@ import { parseInfinitPay2 } from './parsers/infinitPay2';
 import { parseInfinitPay3 } from './parsers/infinitPay3';
 import { parseInfinitPay4 } from './parsers/infinitPay4';
 
+
 export const bankOptions = [
   { value: 'banco-da-amazonia', label: 'Banco da Amazônia' },
   { value: 'banco-do-brasil', label: 'Banco do Brasil' },
@@ -35,6 +37,7 @@ export const bankOptions = [
   { value: 'inter', label: 'Inter' },
   { value: 'itau', label: 'Itaú' },
   { value: 'itau-2', label: 'Itaú (Formato 2)' },
+  { value: 'itau-3', label: 'Itaú (Formato 3)' },
   { value: 'itau-ofx', label: 'Itaú (OFX)' },
   { value: 'mercado-pago', label: 'Mercado Pago' },
   { value: 'nubank', label: 'Nubank' },
@@ -60,6 +63,7 @@ export const parsers: { [key: string]: (fileContent: string, companyCnpj: string
   'inter': parseInter,
   'itau': parseItau,
   'itau-2': parseItau2,
+  'itau-3': parseItau3,
   'itau-ofx': parseItauOfx,
   'mercado-pago': parseMercadoPago,
   'nubank': parseNubank,

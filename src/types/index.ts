@@ -1,3 +1,9 @@
+export interface Invoice {
+  fileName: string;
+  date: string; // DD/MM/AAAA
+  amount: number;
+}
+
 export type TransactionCategory = 'taxable' | 'non-taxable';
 
 export interface Transaction {
@@ -15,6 +21,8 @@ export interface AnalysisData {
   partnerNames: string;
   totalInvoices: string;
   competenceDate: Date;
+  companyName: string;
+  manualRevenue?: number;
 }
 
 // Estrutura que o seu Webhook DEVE retornar

@@ -78,7 +78,7 @@ export const AIComparisonReport = ({ originalTransactions, aiResult, analysisDat
                 Análise para <strong>{analysisData.cnpj}</strong> referente a <strong>{format(analysisData.competenceDate, "MMMM 'de' yyyy", { locale: ptBR })}</strong>
               </CardDescription>
             </div>
-            <Button onClick={onBack} variant="outline">Nova Análise</Button>
+            <Button onClick={onBack} variant="outline">Voltar</Button>
           </div>
         </CardHeader>
         <CardContent>

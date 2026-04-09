@@ -7,19 +7,23 @@ import { UploadCloud, File as FileIcon, X } from 'lucide-react';
 interface FileUploadProps {
   files: File[];
   setFiles: (files: File[]) => void;
+  accept?: Record<string, string[]>;
+  fileTypeDescription?: string;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({ files, setFiles }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ 
+  files, 
+  setFiles,
+  accept = { 'text/csv': ['.csv'], 'application/ofx': ['.ofx'] },
+  fileTypeDescription = "Apenas arquivos .csv e .ofx são permitidos"
+}) => {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setFiles([...files, ...acceptedFiles]);
   }, [files, setFiles]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      'text/csv': ['.csv'],
-      'application/ofx': ['.ofx'],
-    },
+    accept,
   });
 
   const removeFile = (fileToRemove: File) => {
@@ -41,7 +45,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ files, setFiles }) => {
           ) : (
             <p>Arraste e solte os arquivos aqui, ou clique para selecionar</p>
           )}
-          <p className="text-xs">Apenas arquivos .csv e .ofx são permitidos</p>
+          <p className="text-xs">{fileTypeDescription}</p>
         </div>
       </div>
       {files.length > 0 && (

@@ -112,7 +112,8 @@ const PrintableReport = ({ transactions, analysisData }: { transactions: Transac
     <div className="hidden print-only">
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold mb-2">Relatório de Análise Financeira</h1>
-        <p><strong>Empresa (CNPJ):</strong> {analysisData.cnpj}</p>
+        <p><strong>Empresa:</strong> {analysisData.companyName}</p>
+        <p><strong>CNPJ:</strong> {analysisData.cnpj}</p>
         <p><strong>Mês de Competência:</strong> {format(analysisData.competenceDate, "MMMM 'de' yyyy", { locale: ptBR })}</p>
       </div>
 
@@ -205,9 +206,9 @@ export const AnalysisResult = ({ transactions, analysisData, onBack, onToggleCat
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <CardTitle className="text-xl font-semibold">Resultado da Análise Geral</CardTitle>
+                <CardTitle className="text-xl font-semibold">{analysisData.companyName}</CardTitle>
                 <CardDescription>
-                  Análise para <strong>{analysisData.cnpj}</strong> referente a <strong>{format(analysisData.competenceDate, "MMMM 'de' yyyy", { locale: ptBR })}</strong>
+                  Análise para o CNPJ <strong>{analysisData.cnpj}</strong> referente a <strong>{format(analysisData.competenceDate, "MMMM 'de' yyyy", { locale: ptBR })}</strong>
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
